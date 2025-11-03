@@ -1,0 +1,413 @@
+openapi: 3.0.3
+info:
+  title: Transactionify API
+  description: |
+    A simple payment and account management API.
+
+    ## Authentication
+    All endpoints require authentication using an API Key passed in the Authorization header:
+    ```
+    Authorization: APIKey <your-api-key>
+    ```
+
+    ## Features
+    - Create and manage accounts with different currencies (USD, EUR, GBP)
+    - Create payments for accounts
+    - Retrieve account balances
+    - List transaction history
+  version: 1.0.0
+  contact:
+    name: Transactionify API Support
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Accounts
+    description: Account management operations
+  - name: Payments
+    description: Payment creation operations
+  - name: Balance
+    description: Balance retrieval operations
+  - name: Transactions
+    description: Transaction history operations
+
+paths:
+  /api/v1/accounts:
+    post:
+      tags:
+        - Accounts
+      summary: Create a new account
+      description: Creates a new account for the authenticated user with the specified currency. The account starts with a zero balance.
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currency
+              properties:
+                currency:
+                  type: string
+                  enum: [USD, EUR, GBP]
+                  description: The currency code for the account
+                  example: USD
+            examples:
+              usd:
+                summary: Create USD account
+                value:
+                  currency: USD
+              eur:
+                summary: Create EUR account
+                value:
+                  currency: EUR
+              gbp:
+                summary: Create GBP account
+                value:
+                  currency: GBP
+      responses:
+        '200':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Balance'
+              examples:
+                usd:
+                  summary: USD account created
+                  value:
+                    balance:
+                      value: "0.00"
+                      currency: USD
+        '400':
+          description: Bad request - Invalid currency or missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidCurrency:
+                  summary: Invalid currency
+                  value:
+                    message: "Invalid currency. Allowed values: USD, EUR, GBP"
+                missingCurrency:
+                  summary: Missing currency
+                  value:
+                    message: "Missing required field: currency"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/accounts/{account_id}/payments:
+    post:
+      tags:
+        - Payments
+      summary: Create a new payment
+      description: Creates a new payment for the specified account. The payment currency must match the account currency.
+      operationId: createPayment
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - amount
+              properties:
+                amount:
+                  $ref: '#/components/schemas/Amount'
+            examples:
+              payment:
+                summary: Create payment
+                value:
+                  amount:
+                    value: "100.00"
+                    currency: USD
+      responses:
+        '200':
+          description: Payment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+              examples:
+                payment:
+                  summary: Payment created
+                  value:
+                    type: payment
+                    amount:
+                      value: "100.00"
+                      currency: USD
+                    status: pending
+        '400':
+          description: Bad request - Invalid amount or missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                currencyMismatch:
+                  summary: Currency mismatch
+                  value:
+                    message: "Currency does not match account currency"
+                missingAmount:
+                  summary: Missing amount
+                  value:
+                    message: "Missing required field: amount"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  summary: Account not found
+                  value:
+                    message: "Account not found"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/accounts/{account_id}/balance:
+    get:
+      tags:
+        - Balance
+      summary: Get account balance
+      description: Retrieves the current balance for the specified account, including the current date/time.
+      operationId: getBalance
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200':
+          description: Balance retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceWithDate'
+              examples:
+                balance:
+                  summary: Account balance
+                  value:
+                    balance:
+                      value: "250.50"
+                      currency: USD
+                    date: "2025-11-03T15:13:34.198530Z"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  summary: Account not found
+                  value:
+                    message: "Account not found"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/accounts/{account_id}/transactions:
+    get:
+      tags:
+        - Transactions
+      summary: List account transactions
+      description: Retrieves all transactions for the specified account, including transaction ID, type, amount, and timestamp.
+      operationId: listTransactions
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200':
+          description: Transactions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+              examples:
+                transactions:
+                  summary: Transaction list
+                  value:
+                    - id: "019a4757-c049-7ea8-a110-2ea110c5a6f9"
+                      type: payment
+                      amount:
+                        value: "100.00"
+                        currency: USD
+                      timestamp: "2025-11-03T15:03:54.155792Z"
+                    - id: "019a4757-c049-7ea8-a110-2ea110c5a700"
+                      type: payment
+                      amount:
+                        value: "50.00"
+                        currency: USD
+                      timestamp: "2025-11-03T15:05:57.113136Z"
+                empty:
+                  summary: No transactions
+                  value: []
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: Account not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  summary: Account not found
+                  value:
+                    message: "Account not found"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: |
+        API Key authentication. Use the format: `APIKey <your-api-key>`
+
+        Example: `Authorization: APIKey 3ccff962-c5d8-7d13-84ea-768712380a09`
+
+  parameters:
+    AccountId:
+      name: account_id
+      in: path
+      required: true
+      description: The unique identifier for the account (UUIDv7 format)
+      schema:
+        type: string
+        format: uuid
+        pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      example: "019a4757-c049-7ea8-a110-2ea110c5a6f8"
+
+  schemas:
+    Amount:
+      type: object
+      required:
+        - value
+        - currency
+      properties:
+        value:
+          type: string
+          pattern: '^\d+\.\d{2}$'
+          description: The monetary amount as a string with exactly 2 decimal places
+          example: "100.00"
+        currency:
+          type: string
+          enum: [USD, EUR, GBP]
+          description: The currency code
+          example: USD
+
+    Balance:
+      type: object
+      required:
+        - balance
+      properties:
+        balance:
+          $ref: '#/components/schemas/Amount'
+
+    BalanceWithDate:
+      type: object
+      required:
+        - balance
+        - date
+      properties:
+        balance:
+          $ref: '#/components/schemas/Amount'
+        date:
+          type: string
+          format: date-time
+          description: ISO 8601 formatted timestamp with UTC timezone
+          example: "2025-11-03T15:13:34.198530Z"
+
+    Payment:
+      type: object
+      required:
+        - type
+        - amount
+        - status
+      properties:
+        type:
+          type: string
+          enum: [payment]
+          description: The type of transaction
+          example: payment
+        amount:
+          $ref: '#/components/schemas/Amount'
+        status:
+          type: string
+          enum: [pending]
+          description: The status of the payment
+          example: pending
+
+    Transaction:
+      type: object
+      required:
+        - id
+        - type
+        - amount
+        - timestamp
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The unique identifier for the transaction (UUIDv7 format)
+          example: "019a4757-c049-7ea8-a110-2ea110c5a6f9"
+        type:
+          type: string
+          enum: [payment]
+          description: The type of transaction
+          example: payment
+        amount:
+          $ref: '#/components/schemas/Amount'
+        timestamp:
+          type: string
+          format: date-time
+          description: ISO 8601 formatted timestamp with UTC timezone. May be empty for older transactions.
+          example: "2025-11-03T15:03:54.155792Z"
+
+    Error:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          description: A human-readable error message
+          example: "Account not found"
+
+  responses:
+    UnauthorizedError:
+      description: Authentication failed - Invalid or missing API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            unauthorized:
+              summary: Unauthorized
+              value:
+                message: "Unauthorized"
+
+    InternalServerError:
+      description: Internal server error - An unexpected error occurred
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            internalError:
+              summary: Internal error
+              value:
+                message: "An error occurred while processing your request"

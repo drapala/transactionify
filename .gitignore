@@ -1,0 +1,39 @@
+.idea/
+deploy.sh
+.claude/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# CDK
+.cdk.staging/
+cdk.out/
+*.js
+*.d.ts
+node_modules/
+
+# IDE
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
