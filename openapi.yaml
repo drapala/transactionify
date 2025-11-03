@@ -73,11 +73,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Balance'
+                $ref: '#/components/schemas/AccountCreated'
               examples:
                 usd:
                   summary: USD account created
                   value:
+                    id: "019a4757-c049-7ea8-a110-2ea110c5a6f8"
                     balance:
                       value: "0.00"
                       currency: USD
@@ -139,6 +140,7 @@ paths:
                 payment:
                   summary: Payment created
                   value:
+                    id: "019a4757-c049-7ea8-a110-2ea110c5a6f9"
                     type: payment
                     amount:
                       value: "100.00"
@@ -317,6 +319,20 @@ components:
         balance:
           $ref: '#/components/schemas/Amount'
 
+    AccountCreated:
+      type: object
+      required:
+        - id
+        - balance
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The unique identifier for the newly created account (UUIDv7 format)
+          example: "019a4757-c049-7ea8-a110-2ea110c5a6f8"
+        balance:
+          $ref: '#/components/schemas/Amount'
+
     BalanceWithDate:
       type: object
       required:
@@ -334,10 +350,16 @@ components:
     Payment:
       type: object
       required:
+        - id
         - type
         - amount
         - status
       properties:
+        id:
+          type: string
+          format: uuid
+          description: The unique identifier for the payment/transaction (UUIDv7 format)
+          example: "019a4757-c049-7ea8-a110-2ea110c5a6f9"
         type:
           type: string
           enum: [payment]

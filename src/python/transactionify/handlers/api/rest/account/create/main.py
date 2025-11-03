@@ -34,7 +34,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Example response:
         {
             "statusCode": 200,
-            "body": "{\"balance\": {\"value\": \"0.00\", \"currency\": \"USD\"}}"
+            "body": "{\"id\": \"019a4757-c049-7ea8-a110-2ea110c5a6f8\", \"balance\": {\"value\": \"0.00\", \"currency\": \"USD\"}}"
         }
     """
     print(f"Create account event: {json.dumps(event)}")
@@ -61,8 +61,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         account = create_account(user_id, currency)
         print(f"Successfully created account for user: {user_id}")
 
-        # Return only balance per API spec
+        # Return id and balance
         return ok({
+            'id': account['account_id'],
             'balance': account['balance']
         })
 

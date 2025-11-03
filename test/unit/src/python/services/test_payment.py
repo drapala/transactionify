@@ -31,6 +31,7 @@ class TestCreatePayment:
         )
 
         assert result == {
+            'id': '019a4757-c049-7ea8-a110-2ea110c5a6f9',
             'type': 'payment',
             'amount': {
                 'value': '100.00',
@@ -79,6 +80,7 @@ class TestCreatePayment:
             amount_currency='EUR'
         )
 
+        assert result['id'] == '019a4757-c049-7ea8-a110-2ea110c5a6f9'
         assert result['amount']['currency'] == 'EUR'
         assert result['amount']['value'] == '50.00'
 
@@ -139,6 +141,7 @@ class TestCreatePayment:
             amount_currency='GBP'
         )
 
+        assert result['id'] == '019a4757-c049-7ea8-a110-2ea110c5a6f9'
         assert result['amount']['value'] == '123.45'
         assert result['amount']['currency'] == 'GBP'
 

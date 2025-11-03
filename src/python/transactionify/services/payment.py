@@ -23,7 +23,7 @@ def create_payment(user_id: str, account_id: str, amount_value: str, amount_curr
         amount_currency: The payment currency (USD, EUR, or GBP)
 
     Returns:
-        Payment data with type, amount, and status
+        Payment data with id, type, amount, and status
 
     Raises:
         ValueError: If account doesn't exist, doesn't belong to user, or currency mismatch
@@ -32,6 +32,7 @@ def create_payment(user_id: str, account_id: str, amount_value: str, amount_curr
         >>> payment = create_payment("019a4757-c049-7ea8-a110-2ea110c5a6f7", "019a4757-c049-7ea8-a110-2ea110c5a6f8", "100.00", "USD")
         >>> print(payment)
         {
+            "id": "019a4757-c049-7ea8-a110-2ea110c5a6f9",
             "type": "payment",
             "amount": {
                 "value": "100.00",
@@ -79,6 +80,7 @@ def create_payment(user_id: str, account_id: str, amount_value: str, amount_curr
     )
 
     return {
+        'id': transaction_id,
         'type': 'payment',
         'amount': {
             'value': amount_value,

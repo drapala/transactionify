@@ -21,6 +21,9 @@ def ok(body: Dict[str, Any]) -> Dict:
     """
     return {
         'statusCode': 200,
+        'headers': {
+            'Content-Type': 'application/json',
+        },
         'body': json.dumps(body)
     }
 
@@ -44,6 +47,9 @@ def bad_request(message: str, error_type: Optional[str] = None) -> Dict[str, Any
 
     return {
         'statusCode': 400,
+        'headers': {
+            'Content-Type': 'application/json',
+        },
         'body': json.dumps(body)
     }
 
@@ -63,6 +69,9 @@ def unauthorized(message: str, error_type: Optional[str] = None) -> Dict[str, An
 
     return {
         'statusCode': 401,
+        'headers': {
+            'Content-Type': 'application/json',
+        },
         'body': json.dumps(body)
     }
 
@@ -82,6 +91,9 @@ def not_found(message: str, error_type: Optional[str] = None) -> Dict[str, Any]:
 
     return {
         'statusCode': 404,
+        'headers': {
+            'Content-Type': 'application/json',
+        },
         'body': json.dumps(body)
     }
 
@@ -101,5 +113,8 @@ def internal_server_error(message: str, error_type: Optional[str] = None) -> Dic
 
     return {
         'statusCode': 500,
+        'headers': {
+            'Content-Type': 'application/json',
+        },
         'body': json.dumps(body)
     }

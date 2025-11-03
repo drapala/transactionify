@@ -13,6 +13,7 @@ class TestCreatePaymentHandler:
     def test_handler_success(self, mock_create_payment):
         """Test successful payment creation."""
         mock_create_payment.return_value = {
+            'id': '019a4757-c049-7ea8-a110-2ea110c5a6f9',
             'type': 'payment',
             'amount': {
                 'value': '100.00',
@@ -46,6 +47,7 @@ class TestCreatePaymentHandler:
         assert response['statusCode'] == 200
         body = json.loads(response['body'])
         assert body == {
+            'id': '019a4757-c049-7ea8-a110-2ea110c5a6f9',
             'type': 'payment',
             'amount': {
                 'value': '100.00',
@@ -64,6 +66,7 @@ class TestCreatePaymentHandler:
     def test_handler_success_eur(self, mock_create_payment):
         """Test successful payment creation with EUR."""
         mock_create_payment.return_value = {
+            'id': '019a4757-c049-7ea8-a110-2ea110c5a700',
             'type': 'payment',
             'amount': {
                 'value': '50.00',
@@ -95,12 +98,14 @@ class TestCreatePaymentHandler:
 
         assert response['statusCode'] == 200
         body = json.loads(response['body'])
+        assert body['id'] == '019a4757-c049-7ea8-a110-2ea110c5a700'
         assert body['amount']['currency'] == 'EUR'
 
     @patch('src.python.transactionify.handlers.api.rest.payment.create.main.create_payment')
     def test_handler_lowercase_currency(self, mock_create_payment):
         """Test that lowercase currency is converted to uppercase."""
         mock_create_payment.return_value = {
+            'id': '019a4757-c049-7ea8-a110-2ea110c5a6f9',
             'type': 'payment',
             'amount': {
                 'value': '100.00',

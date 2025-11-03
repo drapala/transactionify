@@ -38,7 +38,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Example response:
         {
             "statusCode": 200,
-            "body": "{\"type\": \"payment\", \"amount\": {\"value\": \"100.00\", \"currency\": \"USD\"}, \"status\": \"pending\"}"
+            "body": "{\"id\": \"019a4757-c049-7ea8-a110-2ea110c5a6f9\", \"type\": \"payment\", \"amount\": {\"value\": \"100.00\", \"currency\": \"USD\"}, \"status\": \"pending\"}"
         }
     """
     print(f"Create payment event: {json.dumps(event)}")

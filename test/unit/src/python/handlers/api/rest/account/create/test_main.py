@@ -37,6 +37,7 @@ class TestCreateAccountHandler:
         assert response['statusCode'] == 200
         body = json.loads(response['body'])
         assert body == {
+            'id': '019a4757-c049-7ea8-a110-2ea110c5a6f8',
             'balance': {
                 'value': '0.00',
                 'currency': 'USD'
@@ -71,6 +72,7 @@ class TestCreateAccountHandler:
 
         assert response['statusCode'] == 200
         body = json.loads(response['body'])
+        assert body['id'] == '019a4757-c049-7ea8-a110-2ea110c5a6f8'
         assert body['balance']['currency'] == 'EUR'
         mock_create_account.assert_called_once_with('019a4757-c049-7ea8-a110-2ea110c5a6f7', 'EUR')
 
@@ -101,6 +103,7 @@ class TestCreateAccountHandler:
 
         assert response['statusCode'] == 200
         body = json.loads(response['body'])
+        assert body['id'] == '019a4757-c049-7ea8-a110-2ea110c5a6f8'
         assert body['balance']['currency'] == 'GBP'
 
     @patch('src.python.transactionify.handlers.api.rest.account.create.main.create_account')
