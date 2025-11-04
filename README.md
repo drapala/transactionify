@@ -25,8 +25,12 @@ POST /api/v1/accounts/{account_id}/payments
 ### Get Balance
 GET /api/v1/accounts/{account_id}/balance
 
-### List Transactions
-GET /api/v1/accounts/{account_id}/transactions
+### List Transactions (Paginated)
+GET /api/v1/accounts/{account_id}/transactions?limit=20&cursor=eyJQSyI6...
+
+Query parameters:
+- `limit`: Number of transactions per page (default: 20, max: 100)
+- `cursor`: Pagination cursor from previous response
 
 ### Prerequisites
 - Python 3.9+

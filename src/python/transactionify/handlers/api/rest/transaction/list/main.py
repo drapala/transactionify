@@ -2,16 +2,17 @@
 
 import json
 from typing import Dict, Any
-from transactionify.tools.response import ok, unauthorized, not_found, internal_server_error
+from transactionify.tools.response import ok, bad_request, unauthorized, not_found, internal_server_error
 from transactionify.services.transaction import list_transactions
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    List all transactions for an account.
+    List transactions for an account with pagination support.
 
     The user_id comes from the authorizer context.
     The account_id comes from the path parameters.
+    Pagination parameters come from query string.
 
     Event format:
     {
@@ -24,6 +25,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         },
         "pathParameters": {
             "account_id": "019a4757-c049-7ea8-a110-2ea110c5a6f8"
+        },
+        "queryStringParameters": {
+            "limit": "20",
+            "cursor": "eyJQSyI6..."
         }
     }
 
@@ -32,12 +37,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         context: Lambda context object
 
     Returns:
-        API Gateway response with list of transactions
+        API Gateway response with paginated transactions
 
     Example response:
         {
             "statusCode": 200,
-            "body": "[{\"id\": \"...\", \"type\": \"payment\", \"amount\": {...}, \"timestamp\": \"...\"}]"
+            "body": "{\"transactions\": [...], \"has_more\": true, \"next_cursor\": \"eyJQSyI6...\"}"
         }
     """
     print(f"List transactions event: {json.dumps(event)}")
@@ -54,12 +59,26 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     except (KeyError, TypeError):
         return not_found('Account not found')
 
+    # Extract query parameters for pagination
+    query_params = event.get('queryStringParameters') or {}
+
+    # Parse limit (default 20, max 100)
+    try:
+        limit = int(query_params.get('limit', 20))
+        limit = max(1, min(limit, 100))  # Clamp between 1 and 100
+    except (ValueError, TypeError):
+        limit = 20
+
+    # Get cursor for pagination
+    cursor = query_params.get('cursor')
+
     # List transactions
     try:
-        transactions = list_transactions(user_id, account_id)
-        print(f"Successfully retrieved {len(transactions)} transactions for account: {account_id}")
+        result = list_transactions(user_id, account_id, limit=limit, cursor=cursor)
+        transaction_count = len(result.get('transactions', []))
+        print(f"Successfully retrieved {transaction_count} transactions for account: {account_id}")
 
-        return ok(transactions)
+        return ok(result)
 
     except ValueError as e:
         # Validation error from service - log the actual error but return safe message
@@ -67,7 +86,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         error_msg = str(e).lower()
 
         # Check for specific error types
-        if 'account not found' in error_msg or 'does not belong' in error_msg:
+        if 'cursor' in error_msg or 'pagination' in error_msg:
+            return bad_request('Invalid pagination cursor', 'ValidationError')
+        elif 'account not found' in error_msg or 'does not belong' in error_msg:
             return not_found('Account not found')
 
         # Generic validation error

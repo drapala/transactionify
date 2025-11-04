@@ -222,38 +222,69 @@ paths:
       tags:
         - Transactions
       summary: List account transactions
-      description: Retrieves all transactions for the specified account, including transaction ID, type, amount, and timestamp.
+      description: Retrieves transactions for the specified account with cursor-based pagination. Returns transaction ID, type, amount, and timestamp for each transaction.
       operationId: listTransactions
       parameters:
         - $ref: '#/components/parameters/AccountId'
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of transactions per page (default 20, max 100)
+          example: 20
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Pagination cursor from previous response (opaque base64-encoded string)
+          example: "eyJQSyI6IkFDQ09VTlQjMDE5YTQ3NTctYzA0OS03ZWE4LWExMTAtMmVhMTEwYzVhNmY4IiwiU0siOiJUUkFOU0FDVElPTiMwMTlhNDc1Ny1jMDQ5LTdlYTgtYTExMC0yZWExMTBjNWE2ZjkifQ=="
       responses:
         '200':
           description: Transactions retrieved successfully
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Transaction'
+                $ref: '#/components/schemas/TransactionList'
               examples:
-                transactions:
-                  summary: Transaction list
+                paginated:
+                  summary: Paginated transaction list
                   value:
-                    - id: "019a4757-c049-7ea8-a110-2ea110c5a6f9"
-                      type: payment
-                      amount:
-                        value: "100.00"
-                        currency: USD
-                      timestamp: "2025-11-03T15:03:54.155792Z"
-                    - id: "019a4757-c049-7ea8-a110-2ea110c5a700"
-                      type: payment
-                      amount:
-                        value: "50.00"
-                        currency: USD
-                      timestamp: "2025-11-03T15:05:57.113136Z"
+                    transactions:
+                      - id: "019a4757-c049-7ea8-a110-2ea110c5a6f9"
+                        type: payment
+                        amount:
+                          value: "100.00"
+                          currency: USD
+                        timestamp: "2025-11-03T15:03:54.155792Z"
+                      - id: "019a4757-c049-7ea8-a110-2ea110c5a700"
+                        type: payment
+                        amount:
+                          value: "50.00"
+                          currency: USD
+                        timestamp: "2025-11-03T15:05:57.113136Z"
+                    has_more: true
+                    next_cursor: "eyJQSyI6IkFDQ09VTlQjMDE5YTQ3NTctYzA0OS03ZWE4LWExMTAtMmVhMTEwYzVhNmY4IiwiU0siOiJUUkFOU0FDVElPTiMwMTlhNDc1Ny1jMDQ5LTdlYTgtYTExMC0yZWExMTBjNWE2ZjkifQ=="
                 empty:
                   summary: No transactions
-                  value: []
+                  value:
+                    transactions: []
+                    has_more: false
+        '400':
+          description: Bad request - Invalid pagination cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidCursor:
+                  summary: Invalid pagination cursor
+                  value:
+                    message: "Invalid pagination cursor"
         '401':
           $ref: '#/components/responses/UnauthorizedError'
         '404':
@@ -398,6 +429,26 @@ components:
           format: date-time
           description: ISO 8601 formatted timestamp with UTC timezone. May be empty for older transactions.
           example: "2025-11-03T15:03:54.155792Z"
+
+    TransactionList:
+      type: object
+      required:
+        - transactions
+        - has_more
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transaction'
+          description: List of transactions for the account
+        has_more:
+          type: boolean
+          description: Indicates if more results are available
+          example: true
+        next_cursor:
+          type: string
+          description: Cursor for fetching next page (only present if has_more is true)
+          example: "eyJQSyI6IkFDQ09VTlQjMDE5YTQ3NTctYzA0OS03ZWE4LWExMTAtMmVhMTEwYzVhNmY4IiwiU0siOiJUUkFOU0FDVElPTiMwMTlhNDc1Ny1jMDQ5LTdlYTgtYTExMC0yZWExMTBjNWE2ZjkifQ=="
 
     Error:
       type: object
