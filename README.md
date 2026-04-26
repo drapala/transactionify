@@ -6,6 +6,21 @@
 
 ---
 
+## 🧭 Reviewer shortcut
+
+Time-boxed reading paths, in order of effort:
+
+| Path | Time | Where |
+|---|---|---|
+| **Cockpit** (recommended) | ≤ 10 min | **[EVALUATION.md](EVALUATION.md)** — 90s/5min/15min reading paths + offline evaluator + live-evidence links + deliverable matrix |
+| ADR | 2 min | [docs/ADR/0001-golden-path.pdf](docs/ADR/0001-golden-path.pdf) (2 pages, decisions table + trade-offs) |
+| One-command verify | 1–2 min | `git clone … && cd transactionify && ./scripts/evaluate.sh` (no admin / Q App / Docker needed) |
+| Live demo | 15 min | [docs/DEMO.md](docs/DEMO.md) (3 acts: adoption, failure-recovery, telemetry) |
+
+If anything below is unclear, the offline evaluator (`./scripts/evaluate.sh`) is the definitive source of truth — it runs every check the deliverable matrix claims.
+
+---
+
 ## Architecture (one picture)
 
 ```

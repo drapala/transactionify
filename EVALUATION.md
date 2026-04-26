@@ -28,7 +28,7 @@ cd transactionify
 
 `scripts/evaluate.sh` runs the **offline-evaluator suite**: validates lockfiles, runs the 150 tests, validates schemas, checks ADR is exactly 2 pages, regenerates workflows and asserts zero drift, then prints the deliverable matrix as a final report. No network, no cloud, no admin.
 
-Expected last line: `EVALUATE: 150 tests passed; ADR=2 pages; zero workflow drift; deliverable matrix below.`
+Expected last line: `EVALUATE: 71 CLI + 79 framework = 150 tests passed; ADR=2 pages; zero workflow drift; deliverable matrix above.`
 
 ---
 
@@ -55,9 +55,10 @@ Demo readiness: [docs/PRE-MERGE-SETUP.md](docs/PRE-MERGE-SETUP.md) lists the 6 p
 | PR #1 (full ecosystem) — squash-merged ✅ | https://github.com/drapala/transactionify/pull/1 |
 | PR #2 (pnpm cdk → npx cdk fix) — squash-merged ✅ | https://github.com/drapala/transactionify/pull/2 |
 | PR #4 (cdk tsc + dora-emit jq fix) — squash-merged ✅ | https://github.com/drapala/transactionify/pull/4 |
+| PR #6 (evaluator cache hardening) — squash-merged ✅ | https://github.com/drapala/transactionify/pull/6 |
 | Live ruleset on the fork (id 15575639) | `gh api /repos/drapala/transactionify/rulesets` |
-| **Integration pipeline GREEN on main** | https://github.com/drapala/transactionify/actions/runs/24969361226 |
-| Latest PR pipeline run (9/9 green) | https://github.com/drapala/transactionify/actions/runs/24969293862 |
+| **Integration pipeline GREEN on main** | https://github.com/drapala/transactionify/actions/runs/24969880563 (sha 15c75d3, post-#6 merge) |
+| Latest PR pipeline run (9/9 green) | https://github.com/drapala/transactionify/actions/runs/24969876710 |
 | 24-commit Work-ID prose (pre-squash) | `git fetch origin tag v0.1.0-poc && git log --reverse --oneline 7d15122..v0.1.0-poc` — reads as narrative (feat → fix surfacing path). Also at [PR #1 commits](https://github.com/drapala/transactionify/pull/1/commits). |
 | Pre-dispatch audit trail | commit `67e5e17` — 3 audit passes consolidated before any implementation commit |
 
@@ -71,14 +72,14 @@ Demo readiness: [docs/PRE-MERGE-SETUP.md](docs/PRE-MERGE-SETUP.md) lists the 6 p
 | 1.b TypeScript Framework via pnpm | ✅ | `packages/framework/`. `pnpm add 'github:drapala/transactionify#path:packages/framework'` |
 | 1.c Unit tests for each | ✅ | 71 pytest + 79 vitest = 150 total |
 | 1.d DORA telemetry logic | ✅ | `dx dora summarize` over `dora-event.schema.json` |
-| 1.e Comprehensive README | ✅ | `README.md` (251 lines, replaced upstream) |
+| 1.e Comprehensive README | ✅ | `README.md` (259 lines, replaced upstream) |
 | 1.f Usage instructions | ✅ | README §Quickstart + per-stack docs |
 | 1.g Inner-Source CONTRIBUTING | ✅ | `CONTRIBUTING.md` (222 lines) |
 | 2 ADR PDF (max 2 pages) | ✅ | `docs/ADR/0001-golden-path.pdf` — exactly 2 pages (`pdfinfo` verified) |
 | 3.a Local environment | ✅ | `dx local up` + LocalStack; `docs/LOCAL-ENV.md` cites PDF p.4 §3.a verbatim |
 | 3.b Pre-push validation | ✅ | Hook installed by `dx init`; same `CHECK_MANIFEST` as CI |
 | 3.c Amazon Q AI review | ✅ workflow | Step gated on `vars.AMAZON_Q_REVIEW_ENABLED`; demo requires App install (see PRE-MERGE-SETUP) |
-| 3.d Integration pipeline | ✅ live | `.github/workflows/integration.yml` green on main (run 24969361226) |
+| 3.d Integration pipeline | ✅ live | `.github/workflows/integration.yml` green on main (latest run 24969880563) |
 | 3.e Kiro evidence | ✅ | `.kiro/steering/golden-path.md` + `.kiro/specs/golden-path/{requirements,design,tasks}.md` |
 
 ---
