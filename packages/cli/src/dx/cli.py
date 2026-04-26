@@ -35,7 +35,10 @@ app = typer.Typer(
 
 # Sub-apps for each command group. Bodies are intentionally stubs at GP-002 time;
 # their respective tickets replace `_stub` with real implementations.
+from dx.commands.init import init_command  # noqa: E402
+
 init_app = typer.Typer(help="Scaffold .dx.yaml + PR template + pre-push hook (GP-003).")
+init_app.callback(invoke_without_command=True)(init_command)
 check_app = typer.Typer(help="Run lint, unit, PBT, contract, work_id checks (GP-004).")
 branch_app = typer.Typer(help="Create a Work-ID-conformant branch (GP-002b).")
 pr_app = typer.Typer(help="Submit PR; validates branch + commits + title locally first (GP-002b).")
@@ -58,11 +61,6 @@ def _stub(group: str) -> None:
         fix_hint=f"See .kiro/specs/golden-path/tasks.md — the ticket implementing `{group}` is the one to dispatch next.",
         exit_code=2,
     )
-
-
-@init_app.callback(invoke_without_command=True)
-def init_root() -> None:
-    _stub("init")
 
 
 @check_app.callback(invoke_without_command=True)
