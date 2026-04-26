@@ -58,7 +58,7 @@ class PythonAdapter {
                     cmd: "sh",
                     args: [
                         "-c",
-                        "npx cdk synth --quiet && tar -czf service-package.tgz cdk.out/",
+                        "npx tsc && npx cdk synth --quiet && tar -czf service-package.tgz cdk.out/",
                     ],
                 };
             case "wheel":

@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.manifest = void 0;
+/**
+ * Typed import of the codegened CHECK_MANIFEST. Centralises the
+ * `import manifest from "../../generated/check-manifest.json"` cast
+ * so the 5 step builders share the same typed surface (and the cast
+ * lives in ONE place, not five).
+ */
+const check_manifest_json_1 = require("../../generated/check-manifest.json");
+exports.manifest = check_manifest_json_1.default;
+//# sourceMappingURL=data:application/json;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiX21hbmlmZXN0LmpzIiwic291cmNlUm9vdCI6IiIsInNvdXJjZXMiOlsiX21hbmlmZXN0LnRzIl0sIm5hbWVzIjpbXSwibWFwcGluZ3MiOiI7OztBQUFBOzs7OztHQUtHO0FBQ0gsNkVBQThEO0FBR2pELFFBQUEsUUFBUSxHQUFHLDZCQUF1QyxDQUFDIiwic291cmNlc0NvbnRlbnQiOlsiLyoqXG4gKiBUeXBlZCBpbXBvcnQgb2YgdGhlIGNvZGVnZW5lZCBDSEVDS19NQU5JRkVTVC4gQ2VudHJhbGlzZXMgdGhlXG4gKiBgaW1wb3J0IG1hbmlmZXN0IGZyb20gXCIuLi8uLi9nZW5lcmF0ZWQvY2hlY2stbWFuaWZlc3QuanNvblwiYCBjYXN0XG4gKiBzbyB0aGUgNSBzdGVwIGJ1aWxkZXJzIHNoYXJlIHRoZSBzYW1lIHR5cGVkIHN1cmZhY2UgKGFuZCB0aGUgY2FzdFxuICogbGl2ZXMgaW4gT05FIHBsYWNlLCBub3QgZml2ZSkuXG4gKi9cbmltcG9ydCByYXdNYW5pZmVzdCBmcm9tIFwiLi4vLi4vZ2VuZXJhdGVkL2NoZWNrLW1hbmlmZXN0Lmpzb25cIjtcbmltcG9ydCB0eXBlIHsgQ2hlY2tNYW5pZmVzdCB9IGZyb20gXCIuLi8uLi9nZW5lcmF0ZWQvY2hlY2stbWFuaWZlc3QudHlwZXNcIjtcblxuZXhwb3J0IGNvbnN0IG1hbmlmZXN0ID0gcmF3TWFuaWZlc3QgYXMgdW5rbm93biBhcyBDaGVja01hbmlmZXN0O1xuIl19

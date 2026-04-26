@@ -166,7 +166,7 @@ jobs:
       - name: install deps
         run: pnpm install --frozen-lockfile
       - name: cdk synth
-        run: npx cdk synth --quiet
+        run: npx tsc && npx cdk synth --quiet
   sandbox-verify:
     runs-on: ubuntu-latest
     needs:
@@ -197,6 +197,8 @@ jobs:
           # fidelity — real cloud deploy is the ADR Future Integrations evolution path
 
           # (requires OIDC + sandbox AWS account, ~1d of plumbing).
+
+          npx tsc
 
           npx cdk synth --context account=000000000000 --context region=us-east-1 --quiet
 

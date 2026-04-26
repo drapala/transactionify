@@ -45,7 +45,7 @@ function generateIntegrationPipeline(adapter, config) {
             { name: "install deps", run: "pnpm install --frozen-lockfile" },
             {
                 name: "deploy-staging (synth-only at PoC fidelity)",
-                run: "npx cdk synth --context account=000000000000 --context region=us-east-1 --quiet && echo 'synth ok — real deploy requires OIDC (ADR Future Integrations)'",
+                run: "npx tsc && npx cdk synth --context account=000000000000 --context region=us-east-1 --quiet && echo 'synth ok — real deploy requires OIDC (ADR Future Integrations)'",
             },
         ],
         environment: "staging",
@@ -62,7 +62,7 @@ function generateIntegrationPipeline(adapter, config) {
             { name: "install deps", run: "pnpm install --frozen-lockfile" },
             {
                 name: "deploy-prod (synth-only at PoC fidelity)",
-                run: "npx cdk synth --context account=111111111111 --context region=us-east-1 --quiet && echo 'synth ok — real deploy requires OIDC (ADR Future Integrations)'",
+                run: "npx tsc && npx cdk synth --context account=111111111111 --context region=us-east-1 --quiet && echo 'synth ok — real deploy requires OIDC (ADR Future Integrations)'",
             },
         ],
         environment: "production",
