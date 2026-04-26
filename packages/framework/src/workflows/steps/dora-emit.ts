@@ -9,6 +9,11 @@ import type { WorkflowStep } from "../renderer";
  * 3.14. We emit a small inline Python helper that builds a v7 from time +
  * os.urandom (RFC 9562 layout). PoC scope; production would use
  * `pip install uuid-utils` and `from uuid_utils import uuid7`.
+ *
+ * JSON construction: built via `jq -n --arg ...` so every shell variable is
+ * properly escaped (handles quotes, backslashes, newlines in PR titles
+ * automatically). Earlier draft used a heredoc which would break on a PR
+ * title containing `"` — caught during the post-narrative quality audit.
  */
 export interface DoraEmitOptions {
   eventType: "pipeline_run" | "deployment";
@@ -25,44 +30,67 @@ export function doraEmitStep(opts: DoraEmitOptions): WorkflowStep {
     'STARTED_AT="${{ github.event.repository.updated_at }}"',
     'FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"',
     // Untrusted GitHub event fields are passed through env (RAW_TITLE) — see
-    // step.env below. Inline ${{ ... }} interpolation in shell would let a
-    // malicious PR title execute code in the runner.
-    'WORK_ID=$(printf "%s" "$RAW_TITLE" | grep -oE "(LL|GP)-[0-9]+" | head -1 || echo "GP-0")',
+    // step.env below. printf "%s" + quoted var is the canonical-safe pattern.
+    'WORK_ID=$(printf "%s" "$RAW_TITLE" | grep -oE "(LL|GP)-[0-9]+[a-z]?" | head -1 || echo "GP-0")',
     'CHANGE_SUMMARY=$(printf "%s" "$RAW_TITLE" | head -c 240)',
   ];
   if (isDeployment) {
     lines.push('COMMIT_AUTHORED_AT="$(git show -s --format=%aI ${{ github.sha }})"');
   }
-  // Build JSON via heredoc with all required fields per shared-schemas.
+  // Build JSON via `jq -n --arg ...` — every interpolated string is escaped
+  // by jq, so a PR title containing a quote or backslash produces valid JSON.
+  // Heredoc-based construction (earlier draft) would have produced invalid
+  // JSON on quote-containing titles.
   lines.push(
     "mkdir -p dora-events",
-    "cat > dora-events/event.json <<JSON",
-    "{",
-    `  "event_id": "$EVENT_ID",`,
-    `  "schema_version": "1.0.0",`,
-    `  "event_type": "${opts.eventType}",`,
-    `  "service": "${opts.service}",`,
-    `  "repository": "${'${{ github.repository }}'}",`,
-    `  "commit_sha": "${'${{ github.sha }}'}",`,
-    `  "actor": "${'${{ github.actor }}'}",`,
-    `  "work_id": "$WORK_ID",`,
-    `  "change_summary": "$CHANGE_SUMMARY",`,
-    `  "outcome": "$OUTCOME",`,
-    `  "started_at": "$STARTED_AT",`,
-    `  "finished_at": "$FINISHED_AT",`,
-    `  "source": "ci",`,
-    `  "run_id": "${'${{ github.run_id }}'}",`,
-    `  "source_url": "${'${{ github.server_url }}'}/${'${{ github.repository }}'}/actions/runs/${'${{ github.run_id }}'}"${isDeployment ? "," : ""}`,
+    "jq -n \\",
+    '  --arg event_id "$EVENT_ID" \\',
+    `  --arg event_type "${opts.eventType}" \\`,
+    `  --arg service "${opts.service}" \\`,
+    '  --arg repository "${{ github.repository }}" \\',
+    '  --arg commit_sha "${{ github.sha }}" \\',
+    '  --arg actor "${{ github.actor }}" \\',
+    '  --arg work_id "$WORK_ID" \\',
+    '  --arg change_summary "$CHANGE_SUMMARY" \\',
+    '  --arg outcome "$OUTCOME" \\',
+    '  --arg started_at "$STARTED_AT" \\',
+    '  --arg finished_at "$FINISHED_AT" \\',
+    '  --arg run_id "${{ github.run_id }}" \\',
+    '  --arg source_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \\',
   );
   if (isDeployment) {
-    lines.push(`  "commit_authored_at": "$COMMIT_AUTHORED_AT",`);
-    lines.push(`  "is_rework": false`);
+    lines.push('  --arg commit_authored_at "$COMMIT_AUTHORED_AT" \\');
   }
-  lines.push("}");
-  lines.push("JSON");
-  // Validate against schema (uses dx package's _yaml_validate which also handles JSON).
+  // Construct the object. Field order in the produced JSON matches the
+  // schema's required list for readability.
+  const fields = [
+    "event_id: $event_id",
+    'schema_version: "1.0.0"',
+    "event_type: $event_type",
+    "service: $service",
+    "repository: $repository",
+    "commit_sha: $commit_sha",
+    "actor: $actor",
+    "work_id: $work_id",
+    "change_summary: $change_summary",
+    "outcome: $outcome",
+    "started_at: $started_at",
+    "finished_at: $finished_at",
+    'source: "ci"',
+    "run_id: $run_id",
+    "source_url: $source_url",
+  ];
+  if (isDeployment) {
+    fields.push("commit_authored_at: $commit_authored_at");
+    fields.push("is_rework: false");
+  }
+  lines.push(`  '{${fields.join(", ")}}' > dora-events/event.json`);
+  // Validate the produced JSON against the schema. Fail loud rather than
+  // upload a malformed event.
   lines.push("python3 -m pip install --quiet jsonschema");
-  lines.push("python3 -c 'import json,sys;from jsonschema import Draft202012Validator;e=json.load(open(\"dora-events/event.json\"));s=json.load(open(\"packages/shared-schemas/dora-event.schema.json\"));errs=list(Draft202012Validator(s).iter_errors(e));sys.exit(0 if not errs else (print(errs[0].message),1)[1])'");
+  lines.push(
+    "python3 -c 'import json,sys;from jsonschema import Draft202012Validator;e=json.load(open(\"dora-events/event.json\"));s=json.load(open(\"packages/shared-schemas/dora-event.schema.json\"));errs=list(Draft202012Validator(s).iter_errors(e));sys.exit(0 if not errs else (print(errs[0].message),1)[1])'",
+  );
   return {
     name: "emit DORA event",
     run: lines.join("\n"),

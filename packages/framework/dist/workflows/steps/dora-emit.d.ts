@@ -8,6 +8,11 @@ import type { WorkflowStep } from "../renderer";
  * 3.14. We emit a small inline Python helper that builds a v7 from time +
  * os.urandom (RFC 9562 layout). PoC scope; production would use
  * `pip install uuid-utils` and `from uuid_utils import uuid7`.
+ *
+ * JSON construction: built via `jq -n --arg ...` so every shell variable is
+ * properly escaped (handles quotes, backslashes, newlines in PR titles
+ * automatically). Earlier draft used a heredoc which would break on a PR
+ * title containing `"` — caught during the post-narrative quality audit.
  */
 export interface DoraEmitOptions {
     eventType: "pipeline_run" | "deployment";
