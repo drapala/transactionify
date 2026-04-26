@@ -13,3 +13,34 @@ dev = [
     "pytest>=8.0",
     "jsonschema>=4.21",
 ]
+
+# Ruff baseline (P1-4). Permissive on purpose for the PoC: the fork's existing
+# source has not been ruff-cleaned and tightening is the ADR Future Integrations
+# evolution path. Selecting E + F at minimum proves the config catches real
+# violations (canary: `import os; import os` triggers F811) — NOT
+# 'ignore everything'.
+[tool.ruff]
+line-length = 120
+extend-exclude = [
+    "cdk.out",
+    "node_modules",
+    ".venv",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]   # pycodestyle Errors + pyflakes + isort
+ignore = [
+    "E501",                 # long-line — line-length-aware via [tool.ruff] above
+    "I001",                 # import-block formatting — defer until isort import-style is decided
+    "E402",                 # module-level imports after code — common in CLI entry points
+    "E741",                 # ambiguous-name — too noisy on the existing fork source
+    "F401",                 # unused-import — fork's __init__.py files re-export by import
+    "F541",                 # f-string-without-placeholders — common style across the fork's existing source
+    "F841",                 # unused-local — fork has a few examples in error paths
+    # NOT ignored: F811 (the canary), F811 enforces redefinition; if F811 is ever
+    # ignored, the validation_commands ruff-canary check will fail loudly.
+]
+
+[tool.ruff.lint.per-file-ignores]
+"test/unit/**/*.py" = ["F401", "F811"]                       # test fixtures may import unused / re-import
+"packages/cli/tests/fixtures/failing-repo/**.py" = ["F401"]   # fixture is INTENTIONALLY F401

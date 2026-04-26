@@ -1,0 +1,255 @@
+name: PR
+'on':
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: install uv
+        run: pipx install uv
+      - name: uv sync
+        run: uv sync --all-packages
+      - name: lint
+        run: ruff check .
+  work-id-pr-title:
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+    steps:
+      - name: work-id PR title check
+        run: |-
+          title="$PR_TITLE"
+          pattern='^(LL|GP)-[0-9]+: .+$'
+          if [[ ! "$title" =~ $pattern ]]; then
+            echo "::error::PR title '$title' must match $pattern (e.g. 'GP-123: feat add validator'). See .kiro/steering/golden-path.md." 
+            exit 1
+          fi
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+  unit-tests:
+    runs-on: ubuntu-latest
+    needs:
+      - lint
+    env:
+      AWS_DEFAULT_REGION: us-east-1
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: install uv
+        run: pipx install uv
+      - name: uv sync
+        run: uv sync --all-packages
+      - name: unit tests
+        run: pytest -x -q -m not pbt
+        working-directory: test/unit/src/python
+  pbt:
+    runs-on: ubuntu-latest
+    needs:
+      - unit-tests
+    env:
+      AWS_DEFAULT_REGION: us-east-1
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: install uv
+        run: pipx install uv
+      - name: uv sync
+        run: uv sync --all-packages
+      - name: PBT (Hypothesis)
+        run: pytest -x -q -m pbt
+        working-directory: test/unit/src/python
+  contract:
+    runs-on: ubuntu-latest
+    needs:
+      - pbt
+    env:
+      AWS_DEFAULT_REGION: us-east-1
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: install uv
+        run: pipx install uv
+      - name: uv sync
+        run: uv sync --all-packages
+      - name: contract (schemathesis)
+        run: schemathesis run openapi.yaml --checks=all
+  ai-review:
+    runs-on: ubuntu-latest
+    needs:
+      - contract
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    continue-on-error: true
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: AI review (Amazon Q via GitHub App, non-blocking)
+        if: ${{ vars.AMAZON_Q_REVIEW_ENABLED == 'true' }}
+        run: gh pr comment ${{ github.event.pull_request.number }} --body "/q review"
+        env:
+          GH_TOKEN: ${{ github.token }}
+  cdk-synth:
+    runs-on: ubuntu-latest
+    needs:
+      - contract
+    env:
+      AWS_DEFAULT_REGION: us-east-1
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+      - name: setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - name: install deps
+        run: pnpm install --frozen-lockfile
+      - name: cdk synth
+        run: pnpm cdk synth --quiet
+  sandbox-verify:
+    runs-on: ubuntu-latest
+    needs:
+      - cdk-synth
+      - work-id-pr-title
+    env:
+      AWS_DEFAULT_REGION: us-east-1
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: pnpm
+      - name: setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - name: install deps
+        run: pnpm install --frozen-lockfile
+      - name: sandbox verify (synth-only at PoC fidelity)
+        run: >-
+          # Synth against a stub sandbox account/region. NO AWS credentials configured at PoC
+
+          # fidelity — real cloud deploy is the ADR Future Integrations evolution path
+
+          # (requires OIDC + sandbox AWS account, ~1d of plumbing).
+
+          pnpm cdk synth --context account=000000000000 --context region=us-east-1 --quiet
+
+          test -d cdk.out
+
+          find cdk.out -maxdepth 1 -name '*.template.json' -print -quit | grep -q . || { echo 'no synthesised templates
+          in cdk.out/'; exit 1; }
+  dora-emit:
+    runs-on: ubuntu-latest
+    needs:
+      - sandbox-verify
+    if: always()
+    permissions:
+      contents: read
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: emit DORA event
+        run: >-
+          set -euo pipefail
+
+          EVENT_ID=$(python3 -c 'import
+          os,time;ts=int(time.time()*1000);b=os.urandom(10);v7=(ts<<80)|(7<<76)|((b[0]&0x0f)<<72)|(b[1]<<64)|((b[2]&0x3f|0x80)<<56)|(int.from_bytes(b[3:10],"big"));h=v7.to_bytes(16,"big").hex();print(f"{h[0:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}")')
+
+          OUTCOME="${{ needs.sandbox-verify.result == 'success' && 'success' || 'failure' }}"
+
+          STARTED_AT="${{ github.event.repository.updated_at }}"
+
+          FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          WORK_ID=$(printf "%s" "$RAW_TITLE" | grep -oE "(LL|GP)-[0-9]+" | head -1 || echo "GP-0")
+
+          CHANGE_SUMMARY=$(printf "%s" "$RAW_TITLE" | head -c 240)
+
+          mkdir -p dora-events
+
+          cat > dora-events/event.json <<JSON
+
+          {
+            "event_id": "$EVENT_ID",
+            "schema_version": "1.0.0",
+            "event_type": "pipeline_run",
+            "service": "transactionify",
+            "repository": "${{ github.repository }}",
+            "commit_sha": "${{ github.sha }}",
+            "actor": "${{ github.actor }}",
+            "work_id": "$WORK_ID",
+            "change_summary": "$CHANGE_SUMMARY",
+            "outcome": "$OUTCOME",
+            "started_at": "$STARTED_AT",
+            "finished_at": "$FINISHED_AT",
+            "source": "ci",
+            "run_id": "${{ github.run_id }}",
+            "source_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          }
+
+          JSON
+
+          python3 -m pip install --quiet jsonschema
+
+          python3 -c 'import json,sys;from jsonschema import
+          Draft202012Validator;e=json.load(open("dora-events/event.json"));s=json.load(open("packages/shared-schemas/dora-event.schema.json"));errs=list(Draft202012Validator(s).iter_errors(e));sys.exit(0
+          if not errs else (print(errs[0].message),1)[1])'
+        env:
+          RAW_TITLE: ${{ github.event.pull_request.title || github.event.head_commit.message }}
+      - name: upload dora-events
+        uses: actions/upload-artifact@v4
+        with:
+          name: dora-events
+          path: dora-events/
