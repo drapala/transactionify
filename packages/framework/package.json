@@ -10,7 +10,8 @@
     "build": "tsc",
     "test": "vitest run",
     "codegen": "tsx scripts/codegen-types.ts",
-    "gen-workflows": "echo 'gen-workflows lands in GP-007 (workflow generator). Renderer is operational; pipeline plan is the next ticket.' && exit 0"
+    "gen-fixtures": "tsx scripts/gen-fixtures.ts",
+    "gen-workflows": "tsx scripts/gen-fixtures.ts"
   },
   "dependencies": {
     "js-yaml": "^4.1.0"

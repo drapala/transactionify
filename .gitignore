@@ -38,5 +38,9 @@ node_modules/
 .DS_Store
 Thumbs.db
 
+# TypeScript build outputs
+dist/
+*.tsbuildinfo
+
 # Candidate private scratchpad (see CLAUDE.md memory + Obsidian vault for narrative source)
 docs/superpowers/

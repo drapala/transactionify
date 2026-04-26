@@ -29,6 +29,12 @@ export interface WorkflowJob {
   env?: Record<string, string>;
   permissions?: Record<string, string>;
   steps: WorkflowStep[];
+  /** When true, the job's failure does NOT fail the workflow (used for ai-review). */
+  continueOnError?: boolean;
+  /** Job-level `if:` expression (e.g. 'always()' for dora-emit). */
+  if?: string;
+  /** GitHub deployment environment (used by deploy-staging / deploy-prod). */
+  environment?: string;
 }
 
 export interface WorkflowTrigger {
@@ -62,8 +68,11 @@ export function render(plan: WorkflowPlan): string {
       "runs-on": job.runsOn,
     };
     if (job.needs && job.needs.length > 0) jobObj.needs = job.needs;
+    if (job.if) jobObj.if = job.if;
+    if (job.environment) jobObj.environment = job.environment;
     if (job.permissions) jobObj.permissions = job.permissions;
     if (job.env) jobObj.env = job.env;
+    if (job.continueOnError) jobObj["continue-on-error"] = true;
     jobObj.steps = job.steps.map(stepToYaml);
     jobs[job.id] = jobObj;
   }
