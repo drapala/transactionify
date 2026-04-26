@@ -1,6 +1,6 @@
 # Pre-merge setup — what the reviewer needs before reproducing the demo
 
-> **Goal:** make the live demo (`DEMO.md`) reproducible on the reviewer's machine in <10 minutes. Every precondition below is checked by `bash demo/preflight.sh`; this document is the human-readable version with install commands.
+> **Goal:** make the live demo (`DEMO.md`) reproducible on the reviewer's machine in <10 minutes. Every precondition below is checked by `bash scripts/scripts/demo/preflight.sh`; this document is the human-readable version with install commands.
 
 ---
 
@@ -94,7 +94,7 @@ uv tool install --editable packages/cli   # puts `dx` on PATH
 ## Final preflight (60 seconds)
 
 ```bash
-bash demo/preflight.sh
+bash scripts/scripts/demo/preflight.sh
 ```
 
 All ✓ green = ready. Any ✗ red = fix before stage.
