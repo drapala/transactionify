@@ -1,0 +1,45 @@
+meta {
+  name: Create payment
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base_url}}/api/v1/accounts/{{account_id}}/payments
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: APIKey {{api_key}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "amount": {
+      "value": "100.00",
+      "currency": "USD"
+    }
+  }
+}
+
+docs {
+  Creates a payment for the specified account. The payment currency
+  MUST match the account currency (mismatch returns 400).
+
+  Returns 200 with `{ id, type: "payment", amount, status: "pending" }`.
+  The transaction id is UUIDv7.
+
+  Error cases:
+  - 400 currency mismatch / missing amount / invalid format
+  - 401 invalid APIKey
+  - 404 account not found
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: matches /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+  res.body.type: eq payment
+  res.body.status: eq pending
+}

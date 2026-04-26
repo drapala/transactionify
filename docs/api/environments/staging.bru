@@ -1,0 +1,11 @@
+vars {
+  base_url: https://api-staging.transactionify.example.com
+  api_key: REPLACE_WITH_STAGING_API_KEY
+  account_id: REPLACE_WITH_STAGING_ACCOUNT_UUID
+}
+
+# Staging environment — values populated post-deploy.
+# At PoC fidelity (synth-only deploys), this environment is a placeholder for
+# the eventual real-deploy evolution path (ADR Future Integration: OIDC + per-
+# environment AWS roles). The Bruno collection works against any base_url that
+# serves the OpenAPI 3.0 contract in openapi.yaml.

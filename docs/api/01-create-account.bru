@@ -1,0 +1,41 @@
+meta {
+  name: Create account
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{base_url}}/api/v1/accounts
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: APIKey {{api_key}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "currency": "USD"
+  }
+}
+
+docs {
+  Creates a new account for the authenticated user with the specified
+  currency. Returns 200 with `{ id, balance: { value, currency } }`.
+
+  Currency must be one of USD, EUR, GBP (per openapi.yaml).
+
+  Error cases:
+  - 400 invalid/missing currency
+  - 401 invalid/missing APIKey
+  - 500 internal error
+}
+
+assert {
+  res.status: eq 200
+  res.body.id: matches /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+  res.body.balance.value: eq "0.00"
+  res.body.balance.currency: eq USD
+}

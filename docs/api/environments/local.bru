@@ -1,0 +1,16 @@
+vars {
+  base_url: http://localhost:4566
+  api_key: REPLACE_WITH_LOCAL_PROVISIONED_KEY
+  account_id: 019a4757-c049-7ea8-a110-2ea110c5a6f8
+}
+
+# Local environment — points at LocalStack edge port (when `dx local up` is running).
+# Note: LocalStack alone does NOT serve the Lambda handlers behind the API Gateway.
+# Live HTTP path is OUT of PoC scope (ADR Future Integration #2 — FastAPI adapter
+# wrapping a Lambda handler). For local DynamoDB inspection use:
+#
+#   aws --endpoint-url=http://localhost:4566 dynamodb scan --table-name <stack>-table
+#
+# This environment exists for the eventual evolution-path use case where a local
+# HTTP entry-point IS available; today, prefer the staging environment for live
+# request testing and the LocalStack scan for data verification.

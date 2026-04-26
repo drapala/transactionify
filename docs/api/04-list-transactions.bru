@@ -1,0 +1,46 @@
+meta {
+  name: List transactions
+  type: http
+  seq: 4
+}
+
+get {
+  url: {{base_url}}/api/v1/accounts/{{account_id}}/transactions?limit=20
+  auth: none
+}
+
+headers {
+  Authorization: APIKey {{api_key}}
+}
+
+params:query {
+  limit: 20
+  ~cursor: eyJQSyI6IkFDQ09VTlQjMDE5YTQ3NTctYzA0OS03ZWE4LWExMTAtMmVhMTEwYzVhNmY4IiwiU0siOiJUUkFOU0FDVElPTiMwMTlhNDc1Ny1jMDQ5LTdlYTgtYTExMC0yZWExMTBjNWE2ZjkifQ==
+}
+
+docs {
+  Lists transactions for the specified account with cursor-based
+  pagination. Returns id, type, amount, timestamp per transaction.
+
+  Query parameters:
+  - limit (1..100, default 20)
+  - cursor (opaque base64 from previous response's next_cursor)
+
+  Returns 200 with `{ transactions: [], has_more, next_cursor? }`.
+
+  Pagination protocol:
+  - First page: omit cursor.
+  - Subsequent pages: pass cursor = previous response's next_cursor.
+  - Stop when has_more=false or next_cursor absent.
+
+  Error cases:
+  - 400 invalid cursor
+  - 401 invalid APIKey
+  - 404 account not found
+}
+
+assert {
+  res.status: eq 200
+  res.body.transactions: isArray
+  res.body.has_more: isBoolean
+}

@@ -1,0 +1,33 @@
+meta {
+  name: Get balance
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{base_url}}/api/v1/accounts/{{account_id}}/balance
+  auth: none
+}
+
+headers {
+  Authorization: APIKey {{api_key}}
+}
+
+docs {
+  Returns the current balance for the specified account, including
+  the date the balance was retrieved.
+
+  Returns 200 with `{ balance: { value, currency }, date }`.
+  date is ISO 8601 with UTC timezone.
+
+  Error cases:
+  - 401 invalid APIKey
+  - 404 account not found
+}
+
+assert {
+  res.status: eq 200
+  res.body.balance.value: matches /^\d+\.\d{2}$/
+  res.body.balance.currency: matches /^(USD|EUR|GBP)$/
+  res.body.date: matches /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/
+}

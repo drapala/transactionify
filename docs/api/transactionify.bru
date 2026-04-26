@@ -1,0 +1,26 @@
+meta {
+  name: Transactionify
+  type: collection
+  seq: 1
+}
+
+# Bruno collection for the Transactionify REST API.
+# Source-of-truth for endpoint shapes is openapi.yaml at the repo root.
+#
+# Usage:
+#   1. Install Bruno (https://www.usebruno.com).
+#   2. Open this folder as a collection.
+#   3. Set environment variables: base_url, api_key.
+#   4. For local-env testing, point base_url at the LocalStack-fronted
+#      service (when GP-009d's `dx local up` is running). Note that
+#      the live HTTP path is OUT of PoC scope — see ADR Future
+#      Integration #2 — so for the PoC the demo Closing uses
+#      `aws --endpoint-url=http://localhost:4566 dynamodb scan`
+#      instead of curl. This Bruno collection still doubles as
+#      executable documentation of the API contract.
+
+vars:pre-request {
+  base_url: https://api.transactionify.example.com
+  api_key: REPLACE_WITH_PROVISIONED_KEY
+  account_id: 019a4757-c049-7ea8-a110-2ea110c5a6f8
+}
