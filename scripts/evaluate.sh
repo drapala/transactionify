@@ -18,14 +18,23 @@ section(){ printf '\n\033[1;34m━━━ %s ━━━\033[0m\n' "$*"; }
 # --- preconditions -----------------------------------------------------------
 
 section "Preconditions"
+declare -A INSTALL_HINTS=(
+  [node]="https://nodejs.org/  (or 'brew install node')"
+  [pnpm]="npm i -g pnpm@9  (or 'brew install pnpm')"
+  [uv]="brew install uv  (or 'curl -LsSf https://astral.sh/uv/install.sh | sh')"
+  [jq]="brew install jq  (or apt-get install jq)"
+  [pdfinfo]="brew install poppler  (or apt-get install poppler-utils)"
+)
 for cmd in node pnpm uv jq pdfinfo; do
   if command -v "$cmd" >/dev/null 2>&1; then
     green "$cmd on PATH"
   else
-    red "$cmd missing — install before running"
+    red "$cmd missing — install: ${INSTALL_HINTS[$cmd]}"
     exit 1
   fi
 done
+
+yellow "First-run cost: pnpm + uv have to download dependencies (~1-2 minutes)."
 
 if [ ! -f pyproject.toml ] || [ ! -f pnpm-workspace.yaml ]; then
   red "must run from repo root (pyproject.toml + pnpm-workspace.yaml not found)"

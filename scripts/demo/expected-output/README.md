@@ -7,10 +7,10 @@ failing, the platform broke; show the snapshot AND the live failure honestly.
 
 | File | Capture command |
 |---|---|
-| `act1-init.json` | `dx init --force --json > demo/expected-output/act1-init.json` |
-| `act1-governance.json` | `dx governance apply --repo $REPO --json > demo/expected-output/act1-governance.json` |
-| `act2-pr-dry-run.json` | `dx pr --dry-run --json > demo/expected-output/act2-pr-dry-run.json` |
-| `closing-dora.json` | `dx dora summarize --events ... --json > demo/expected-output/closing-dora.json` |
+| `act1-init.json` | `dx init --force --json > scripts/demo/expected-output/act1-init.json` |
+| `act1-governance.json` | `dx governance apply --repo $REPO --json > scripts/demo/expected-output/act1-governance.json` |
+| `act2-pr-dry-run.json` | `dx pr --dry-run --json > scripts/demo/expected-output/act2-pr-dry-run.json` |
+| `closing-dora.json` | `dx dora summarize --events ... --json > scripts/demo/expected-output/closing-dora.json` |
 
 Re-capture after any platform change that affects user-visible output. The
 demo's reliability depends on these being current; stale snapshots that

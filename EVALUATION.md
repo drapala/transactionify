@@ -21,9 +21,10 @@
 # Clone + offline evaluation (no GitHub admin, no Q App, no Docker required).
 git clone https://github.com/drapala/transactionify.git
 cd transactionify
-git fetch --tags origin
 ./scripts/evaluate.sh
 ```
+
+**Preconditions:** Node 20+, `pnpm` 9+, `uv`, `jq`, `pdfinfo`. The script lists the install command for each missing tool and exits non-zero. **First-run cost:** ~1–2 minutes (pnpm + uv download dependencies on the first invocation; subsequent runs are seconds).
 
 `scripts/evaluate.sh` runs the **offline-evaluator suite**: validates lockfiles, runs the 150 tests, validates schemas, checks ADR is exactly 2 pages, regenerates workflows and asserts zero drift, then prints the deliverable matrix as a final report. No network, no cloud, no admin.
 
@@ -42,6 +43,8 @@ Expected last line: `EVALUATE: 150 tests passed; ADR=2 pages; zero workflow drif
 | 3. Telemetry (5 min) | download `dora-events` artifact → `dx dora summarize` | 4 PDF metrics from real CI events |
 
 Demo readiness: [docs/PRE-MERGE-SETUP.md](docs/PRE-MERGE-SETUP.md) lists the 6 preconditions; `bash scripts/demo/preflight.sh` checks them.
+
+> Note: `act2_failure_recovery.sh` mutates local repo state (creates a demo branch, makes commits). `scripts/demo/reset.sh` cleans up. `closing_telemetry.sh` is read-only (just runs `dx dora summarize` against the fixture).
 
 ---
 

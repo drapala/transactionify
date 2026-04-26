@@ -10,7 +10,7 @@
 
 | Time | Act | Beat | What the audience sees |
 |---|---|---|---|
-| 0:00 | Preflight | `bash demo/preflight.sh` | green checks; environment is reproducible |
+| 0:00 | Preflight | `bash scripts/demo/preflight.sh` | green checks; environment is reproducible |
 | 0:30 | Act 1 — Adoption | Service team installs the platform from a clean clone | `dx init` in 30s; 7-command CLI surface; `.dx.yaml` validates against shared schema |
 | 4:00 | Act 1 — Governance | `dx governance apply` against the live fork | `gh ruleset list` shows `golden-path-default` applied; 2-reviewer rule, derived required-checks |
 | 6:00 | Act 2 — Failure loop | Bad work_id branch → push blocked by hook | Pre-push fail-fast; *seconds*, not minutes |
@@ -26,7 +26,7 @@
 > **Narrative beat.** "A new service team gets the platform in 5 commands. Convention is enforced at submission, not at review."
 
 ```bash
-bash demo/act1_adoption.sh
+bash scripts/demo/act1_adoption.sh
 ```
 
 What happens, in order:
@@ -46,7 +46,7 @@ What happens, in order:
 > **Narrative beat.** "The platform makes the wrong path harder than the right path. Convention over Configuration is structural, not aspirational."
 
 ```bash
-bash demo/act2_failure_recovery.sh
+bash scripts/demo/act2_failure_recovery.sh
 ```
 
 What happens:
@@ -68,7 +68,7 @@ What happens:
 > **Narrative beat.** "DORA across stacks is structurally comparable: same schema, same aggregator, same four numbers."
 
 ```bash
-bash demo/closing_telemetry.sh
+bash scripts/demo/closing_telemetry.sh
 ```
 
 What happens:
@@ -93,7 +93,7 @@ What happens:
 
 Every script runs idempotently and emits the same JSON output as captured under `demo/expected-output/`. If a beat misbehaves:
 
-1. `bash demo/reset.sh` — tears down LocalStack, re-bootstraps the fixture branch on the demo PR, re-applies the ruleset.
+1. `bash scripts/demo/reset.sh` — tears down LocalStack, re-bootstraps the fixture branch on the demo PR, re-applies the ruleset.
 2. Skip to the next beat; the narration covers the missing one with the snapshot under `demo/expected-output/<beat>.txt`.
 3. If GitHub itself is degraded, point at the recorded `expected-output/` JSONs — they are the artifact even when the live run isn't.
 
