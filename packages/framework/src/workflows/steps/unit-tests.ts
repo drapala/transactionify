@@ -1,11 +1,11 @@
 import type { WorkflowStep } from "../renderer";
-import manifest from "../../generated/check-manifest.json";
+import { manifest } from "./_manifest";
 
 export function unitTestsStep(cwd?: string): WorkflowStep {
-  const m = (manifest as any).unit_tests;
+  const m = manifest.unit_tests;
   return {
     name: "unit tests",
-    run: [m.cmd as string, ...(m.args as string[])].join(" "),
+    run: [m.cmd, ...m.args].join(" "),
     workingDirectory: cwd,
   };
 }

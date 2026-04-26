@@ -1,12 +1,12 @@
 import type { WorkflowStep } from "../renderer";
-import manifest from "../../generated/check-manifest.json";
+import { manifest } from "./_manifest";
 
 /**
  * The PR-title work_id check. Reads `subject_pattern` from the GENERATED
  * manifest (single source of truth — same regex dx check work_id uses).
  */
 export function workIdPrTitleStep(): WorkflowStep {
-  const pattern = (manifest as any).work_id.subject_pattern as string;
+  const pattern = manifest.work_id.subject_pattern;
   return {
     name: "work-id PR title check",
     run: [

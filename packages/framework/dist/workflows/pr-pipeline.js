@@ -109,6 +109,8 @@ function generatePrPipeline(adapter, config) {
                 with: { name: "dora-events", path: "dora-events/" },
             },
         ],
+        // Run even if upstream failed — outcome reflects success/failure.
+        if: "always()",
     };
     const plan = {
         name: "PR",
@@ -119,7 +121,6 @@ function generatePrPipeline(adapter, config) {
         permissions: { contents: "read" },
         jobs: [lint, workIdPrTitle, unitTests, pbt, contract, aiReview, cdkSynth, sandboxVerify, doraEmit],
     };
-    doraEmit.if = "always()";
     return plan;
 }
 exports.generatePrPipeline = generatePrPipeline;

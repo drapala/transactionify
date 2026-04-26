@@ -1,10 +1,10 @@
 import type { WorkflowStep } from "../renderer";
-import manifest from "../../generated/check-manifest.json";
+import { manifest } from "./_manifest";
 
 export function contractStep(): WorkflowStep {
-  const m = (manifest as any).contract;
+  const m = manifest.contract;
   return {
     name: "contract (schemathesis)",
-    run: [m.cmd as string, ...(m.args as string[])].join(" "),
+    run: [m.cmd, ...m.args].join(" "),
   };
 }

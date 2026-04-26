@@ -136,6 +136,8 @@ export function generatePrPipeline(adapter: RuntimeAdapter, config: DxConfig): W
         with: { name: "dora-events", path: "dora-events/" },
       },
     ],
+    // Run even if upstream failed — outcome reflects success/failure.
+    if: "always()",
   };
 
   const plan: WorkflowPlan = {
@@ -147,8 +149,6 @@ export function generatePrPipeline(adapter: RuntimeAdapter, config: DxConfig): W
     permissions: { contents: "read" },
     jobs: [lint, workIdPrTitle, unitTests, pbt, contract, aiReview, cdkSynth, sandboxVerify, doraEmit],
   };
-
-  doraEmit.if = "always()";
 
   return plan;
 }

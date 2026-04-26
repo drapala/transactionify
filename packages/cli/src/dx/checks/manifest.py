@@ -11,11 +11,49 @@ GP-007's cross-import test asserts the framework's workflow generator
 reads commands from the JSON copy byte-for-byte (no hardcoded duplicates).
 That test is the lock keeping local checks identical to CI checks
 (Design Principle 2).
+
+Typed via TypedDict for IDE autocomplete + mypy-friendly downstream
+consumers (dx/dora/load.py + step builders in the TS framework).
+The codegen script (manifest_codegen.py) emits the same shape as JSON;
+the framework codegens a matching TS interface (no `(manifest as any)`).
 """
 
 from __future__ import annotations
 
-CHECK_MANIFEST: dict[str, dict] = {
+from typing import TypedDict
+
+
+class CommandCheck(TypedDict):
+    """Shape for command-driven checks (lint/unit_tests/pbt/contract)."""
+    name: str
+    cmd: str
+    args: list[str]
+    exit_codes_passing: list[int]
+
+
+class WorkIdCheck(TypedDict):
+    """Shape for the work_id pseudo-check (regex set, not a runnable command).
+
+    Three patterns per context — all derived from the same Work ID alphabet:
+      - extract_pattern: raw id (GP-123 or GP-009a) for parsing PR titles
+      - branch_pattern : id + dash slug, for branch names
+      - subject_pattern: id + colon + description, for commit subjects + PR titles
+    """
+    name: str
+    extract_pattern: str
+    branch_pattern: str
+    subject_pattern: str
+
+
+class CheckManifest(TypedDict):
+    lint: CommandCheck
+    unit_tests: CommandCheck
+    pbt: CommandCheck
+    contract: CommandCheck
+    work_id: WorkIdCheck
+
+
+CHECK_MANIFEST: CheckManifest = {
     "lint": {
         "name": "lint",
         "cmd": "ruff",
@@ -45,14 +83,10 @@ CHECK_MANIFEST: dict[str, dict] = {
     },
     "work_id": {
         "name": "work_id",
-        # The same regex everywhere, three formats per context.
         # Trailing [a-z]? permits sub-task suffixes (GP-002b, GP-009a/c/d in
         # tasks.md). The platform's own spec chain uses them, so the canonical
         # regex must accept them — otherwise the platform fails to apply its
         # own conventions to its own commits.
-        #   extract_pattern  : raw id (GP-123 or GP-009a) — parsing PR titles / subjects
-        #   branch_pattern   : id + dash slug             — branch names
-        #   subject_pattern  : id + colon + description   — commit subjects + PR titles
         "extract_pattern": r"(LL|GP)-[0-9]+[a-z]?",
         "branch_pattern": r"^(LL|GP)-[0-9]+[a-z]?-[a-z0-9-]+$",
         "subject_pattern": r"^(LL|GP)-[0-9]+[a-z]?: .+$",

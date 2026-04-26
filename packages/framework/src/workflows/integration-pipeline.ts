@@ -66,8 +66,8 @@ export function generateIntegrationPipeline(adapter: RuntimeAdapter, config: DxC
         run: "pnpm cdk synth --context account=000000000000 --context region=us-east-1 --quiet && echo 'synth ok — real deploy requires OIDC (ADR Future Integrations)'",
       },
     ],
+    environment: "staging",
   };
-  (deployStaging as any).environment = "staging";
 
   const deployProd: WorkflowJob = {
     id: "deploy-prod",
@@ -84,8 +84,8 @@ export function generateIntegrationPipeline(adapter: RuntimeAdapter, config: DxC
         run: "pnpm cdk synth --context account=111111111111 --context region=us-east-1 --quiet && echo 'synth ok — real deploy requires OIDC (ADR Future Integrations)'",
       },
     ],
+    environment: "production",
   };
-  (deployProd as any).environment = "production";
 
   const doraEmit: WorkflowJob = {
     id: "dora-emit",
@@ -106,8 +106,8 @@ export function generateIntegrationPipeline(adapter: RuntimeAdapter, config: DxC
         with: { name: "dora-events", path: "dora-events/" },
       },
     ],
+    if: "always()",
   };
-  (doraEmit as any).if = "always()";
 
   return {
     name: "integration",

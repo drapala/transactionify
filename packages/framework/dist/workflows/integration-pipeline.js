@@ -48,8 +48,8 @@ function generateIntegrationPipeline(adapter, config) {
                 run: "pnpm cdk synth --context account=000000000000 --context region=us-east-1 --quiet && echo 'synth ok — real deploy requires OIDC (ADR Future Integrations)'",
             },
         ],
+        environment: "staging",
     };
-    deployStaging.environment = "staging";
     const deployProd = {
         id: "deploy-prod",
         runsOn: RUNS_ON,
@@ -65,8 +65,8 @@ function generateIntegrationPipeline(adapter, config) {
                 run: "pnpm cdk synth --context account=111111111111 --context region=us-east-1 --quiet && echo 'synth ok — real deploy requires OIDC (ADR Future Integrations)'",
             },
         ],
+        environment: "production",
     };
-    deployProd.environment = "production";
     const doraEmit = {
         id: "dora-emit",
         runsOn: RUNS_ON,
@@ -86,8 +86,8 @@ function generateIntegrationPipeline(adapter, config) {
                 with: { name: "dora-events", path: "dora-events/" },
             },
         ],
+        if: "always()",
     };
-    doraEmit.if = "always()";
     return {
         name: "integration",
         on: {

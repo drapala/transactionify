@@ -1,16 +1,13 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.workIdPrTitleStep = void 0;
-const check_manifest_json_1 = __importDefault(require("../../generated/check-manifest.json"));
+const _manifest_1 = require("./_manifest");
 /**
  * The PR-title work_id check. Reads `subject_pattern` from the GENERATED
  * manifest (single source of truth — same regex dx check work_id uses).
  */
 function workIdPrTitleStep() {
-    const pattern = check_manifest_json_1.default.work_id.subject_pattern;
+    const pattern = _manifest_1.manifest.work_id.subject_pattern;
     return {
         name: "work-id PR title check",
         run: [

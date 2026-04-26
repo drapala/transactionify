@@ -3,14 +3,31 @@
 Window semantics: events are filtered to those whose started_at is within
 the last `window_days` days from `now` (defaults to the most recent event's
 started_at, so the metric is stable across re-runs against the same JSONL).
+
+Typing: consumes typed events (DoraDeploymentEvent / DoraEvent) from
+load.py. Optional fields (commit_authored_at, is_rework,
+recovered_from_failure_id) use NotRequired in the TypedDict; aggregator
+guards on .get() for those, hard-keys for required fields.
 """
 from __future__ import annotations
 
 import statistics
 from datetime import datetime, timedelta, timezone
-from typing import Iterable
+from typing import TypedDict
 
+from dx.dora.event import DoraDeploymentEvent, DoraEvent
 from dx.dora.load import LoadedEvents
+
+
+class DoraSummary(TypedDict):
+    deployment_frequency: float
+    lead_time_for_changes_seconds: float | None
+    change_failure_rate: float
+    mean_time_to_restore_seconds: float | None
+    window: str
+    total_events_seen: int
+    total_events_used: int
+    schema_version: str
 
 
 def _parse_iso(s: str) -> datetime:
@@ -18,38 +35,46 @@ def _parse_iso(s: str) -> datetime:
     return datetime.fromisoformat(s.replace("Z", "+00:00"))
 
 
-def _now_anchor(events: Iterable[dict]) -> datetime:
+def _now_anchor(events: list[DoraDeploymentEvent]) -> datetime:
     """Anchor the window at max(finished_at) so re-runs are stable."""
-    times = [_parse_iso(e["finished_at"]) for e in events if "finished_at" in e]
-    return max(times) if times else datetime.now(tz=timezone.utc)
+    if not events:
+        return datetime.now(tz=timezone.utc)
+    return max(_parse_iso(e["finished_at"]) for e in events)
 
 
-def _filter_in_window(events: list[dict], anchor: datetime, window_days: float) -> list[dict]:
+def _filter_in_window(
+    events: list[DoraDeploymentEvent], anchor: datetime, window_days: float,
+) -> list[DoraDeploymentEvent]:
     cutoff = anchor - timedelta(days=window_days)
     return [e for e in events if _parse_iso(e["started_at"]) >= cutoff]
 
 
-def deployment_frequency(deployments: list[dict], window_days: float) -> float:
+def deployment_frequency(deployments: list[DoraDeploymentEvent], window_days: float) -> float:
     """count(success deployments in window) / window_days."""
     if not deployments or window_days <= 0:
         return 0.0
     anchor = _now_anchor(deployments)
     in_window = _filter_in_window(deployments, anchor, window_days)
-    successes = [d for d in in_window if d.get("outcome") == "success"]
+    successes = [d for d in in_window if d["outcome"] == "success"]
     return len(successes) / window_days
 
 
-def lead_time_for_changes_seconds(deployments: list[dict], window_days: float) -> float | None:
+def lead_time_for_changes_seconds(
+    deployments: list[DoraDeploymentEvent], window_days: float,
+) -> float | None:
     """median(finished_at - commit_authored_at) over successful deployments in window.
     Returns None if no qualifying deployments."""
     if not deployments:
         return None
     anchor = _now_anchor(deployments)
     in_window = _filter_in_window(deployments, anchor, window_days)
-    samples = []
+    samples: list[float] = []
     for d in in_window:
-        if d.get("outcome") != "success":
+        if d["outcome"] != "success":
             continue
+        # commit_authored_at is REQUIRED on DoraDeploymentEvent at the schema level
+        # (GP-001 conditional). Schema validation guarantees its presence; the
+        # explicit guard here is belt-and-braces against direct construction.
         if "commit_authored_at" not in d:
             continue
         dt = (_parse_iso(d["finished_at"]) - _parse_iso(d["commit_authored_at"])).total_seconds()
@@ -59,7 +84,9 @@ def lead_time_for_changes_seconds(deployments: list[dict], window_days: float) -
     return statistics.median(samples)
 
 
-def change_failure_rate(deployments: list[dict], window_days: float) -> float:
+def change_failure_rate(
+    deployments: list[DoraDeploymentEvent], window_days: float,
+) -> float:
     """count(failed deployments) / count(deployments) in window.
     Returns 0.0 when there are no deployments (no false negative for healthy quiet repos)."""
     if not deployments:
@@ -68,7 +95,7 @@ def change_failure_rate(deployments: list[dict], window_days: float) -> float:
     in_window = _filter_in_window(deployments, anchor, window_days)
     if not in_window:
         return 0.0
-    failures = sum(1 for d in in_window if d.get("outcome") == "failure")
+    failures = sum(1 for d in in_window if d["outcome"] == "failure")
     return failures / len(in_window)
 
 
@@ -80,20 +107,20 @@ def mean_time_to_restore_seconds(loaded: LoadedEvents, window_days: float) -> fl
         return None
     anchor = _now_anchor(loaded.deployments)
     in_window = _filter_in_window(loaded.deployments, anchor, window_days)
-    samples = []
+    samples: list[float] = []
     for r in in_window:
         if not r.get("is_rework"):
             continue
         target_id = r.get("recovered_from_failure_id")
         if not target_id:
             continue
-        failure = loaded.by_event_id.get(target_id)
-        if not failure or failure.get("event_type") != "deployment":
+        failure: DoraEvent | None = loaded.by_event_id.get(target_id)
+        if not failure or failure["event_type"] != "deployment":
             continue
         # The failure may be OUTSIDE the window (long unresolved incident).
-        # Per the gherkin: that recovery doesn't contribute. We still count
-        # pairs where the failure exists in the loaded set; the window
-        # filter is on the recovery event.
+        # Per the gherkin: that recovery still contributes. We count pairs
+        # where the failure exists in the loaded set; the window filter is
+        # on the recovery event.
         delta = (_parse_iso(r["finished_at"]) - _parse_iso(failure["started_at"])).total_seconds()
         samples.append(delta)
     if not samples:
@@ -101,7 +128,7 @@ def mean_time_to_restore_seconds(loaded: LoadedEvents, window_days: float) -> fl
     return statistics.fmean(samples)
 
 
-def summarize(loaded: LoadedEvents, window_days: float) -> dict:
+def summarize(loaded: LoadedEvents, window_days: float) -> DoraSummary:
     return {
         "deployment_frequency": deployment_frequency(loaded.deployments, window_days),
         "lead_time_for_changes_seconds": lead_time_for_changes_seconds(loaded.deployments, window_days),

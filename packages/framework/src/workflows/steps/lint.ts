@@ -1,10 +1,10 @@
 import type { WorkflowStep } from "../renderer";
-import manifest from "../../generated/check-manifest.json";
+import { manifest } from "./_manifest";
 
 export function lintStep(): WorkflowStep {
-  const m = (manifest as any).lint;
+  const m = manifest.lint;
   return {
     name: "lint",
-    run: [m.cmd as string, ...(m.args as string[])].join(" "),
+    run: [m.cmd, ...m.args].join(" "),
   };
 }
