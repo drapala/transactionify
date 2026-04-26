@@ -10,6 +10,16 @@
 
 set -euo pipefail
 
+# Local cache/data/bin dirs so the script works in sandboxes where the
+# default ~/.cache/uv, ~/.local/share/uv/tools, ~/.local/bin, or pnpm
+# store is read-only. Honors any env override the evaluator already set.
+export UV_CACHE_DIR="${UV_CACHE_DIR:-${TMPDIR:-/tmp}/transactionify-uv-cache}"
+export XDG_DATA_HOME="${XDG_DATA_HOME:-${TMPDIR:-/tmp}/transactionify-xdg-data}"
+export XDG_BIN_HOME="${XDG_BIN_HOME:-${TMPDIR:-/tmp}/transactionify-xdg-bin}"
+export PNPM_STORE_DIR="${PNPM_STORE_DIR:-${TMPDIR:-/tmp}/transactionify-pnpm-store}"
+mkdir -p "$UV_CACHE_DIR" "$XDG_DATA_HOME" "$XDG_BIN_HOME" "$PNPM_STORE_DIR"
+export PATH="$XDG_BIN_HOME:$PATH"
+
 red()    { printf '\033[0;31m✗ %s\033[0m\n' "$*" >&2; }
 green()  { printf '\033[0;32m✓ %s\033[0m\n' "$*"; }
 yellow() { printf '\033[0;33m· %s\033[0m\n' "$*"; }
@@ -44,18 +54,34 @@ fi
 # --- 1. lockfiles healthy ----------------------------------------------------
 
 section "1/8 Lockfiles"
-pnpm install --frozen-lockfile >/dev/null 2>&1 \
-  && green "pnpm install --frozen-lockfile passes" \
-  || { red "pnpm-lock.yaml out of sync with package.json"; exit 1; }
-uv sync --all-packages --frozen >/dev/null 2>&1 \
-  && green "uv sync --frozen passes" \
-  || { red "uv.lock out of sync with pyproject.toml"; exit 1; }
+if PNPM_INSTALL_OUT=$(pnpm install --frozen-lockfile 2>&1); then
+  green "pnpm install --frozen-lockfile passes"
+else
+  red "pnpm-lock.yaml out of sync with package.json"
+  printf '%s\n' "$PNPM_INSTALL_OUT" | tail -20 >&2
+  exit 1
+fi
+if UV_SYNC_OUT=$(uv sync --all-packages --frozen 2>&1); then
+  green "uv sync --frozen passes"
+else
+  red "uv.lock out of sync with pyproject.toml"
+  printf '%s\n' "$UV_SYNC_OUT" | tail -20 >&2
+  exit 1
+fi
 
 # --- 2. CLI tests ------------------------------------------------------------
 
 section "2/8 CLI tests (Python)"
-uv tool install --quiet --editable packages/cli >/dev/null 2>&1
-PYTEST_OUT=$(uv run pytest packages/cli/tests/ -q 2>&1)
+if ! UV_TOOL_OUT=$(uv tool install --quiet --editable packages/cli 2>&1); then
+  red "dx CLI editable install failed"
+  printf '%s\n' "$UV_TOOL_OUT" | tail -20 >&2
+  exit 1
+fi
+if ! PYTEST_OUT=$(uv run pytest packages/cli/tests/ -q 2>&1); then
+  red "CLI pytest command failed"
+  printf '%s\n' "$PYTEST_OUT" | tail -20 >&2
+  exit 1
+fi
 CLI_PASSED=$(printf '%s' "$PYTEST_OUT" | grep -oE '[0-9]+ passed' | head -1 | grep -oE '[0-9]+' || echo 0)
 if [ "$CLI_PASSED" -ge 71 ]; then
   green "$CLI_PASSED CLI tests passed"
@@ -68,7 +94,11 @@ fi
 # --- 3. Framework tests ------------------------------------------------------
 
 section "3/8 Framework tests (TypeScript)"
-FW_OUT=$(pnpm --filter @golden-path/framework test 2>&1)
+if ! FW_OUT=$(pnpm --filter @golden-path/framework test 2>&1); then
+  red "framework vitest command failed"
+  printf '%s\n' "$FW_OUT" | tail -20 >&2
+  exit 1
+fi
 FW_PASSED=$(printf '%s' "$FW_OUT" | grep -oE '[0-9]+ passed' | tail -1 | grep -oE '[0-9]+' || echo 0)
 if [ "$FW_PASSED" -ge 79 ]; then
   green "$FW_PASSED framework tests passed"

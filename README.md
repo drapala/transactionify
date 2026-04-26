@@ -246,9 +246,14 @@ If you are the reviewer and time is finite, read in this order:
 1. [EVALUATION.md](EVALUATION.md) — reviewer cockpit (90-second / 5-minute / 15-minute paths)
 2. [docs/ADR/0001-golden-path.pdf](docs/ADR/0001-golden-path.pdf) (2 pages)
 3. [docs/DEMO.md](docs/DEMO.md) (live demo script — preview without running)
-3. `.kiro/specs/golden-path/{requirements,design,tasks}.md` (the spec chain)
-4. `git log --oneline main` (commits read like ticket prose)
-5. Run `dx --help` (or skim `packages/cli/src/dx/cli.py`) to see the surface in <60 seconds
-6. Run [docs/PRE-MERGE-SETUP.md](docs/PRE-MERGE-SETUP.md) checklist if you want to reproduce the live demo
+4. `.kiro/specs/golden-path/{requirements,design,tasks}.md` (the spec chain)
+5. **The 24-commit ticket trail.** Main was squash-merged for clean history; the per-Work-ID prose is preserved at tag `v0.1.0-poc`:
+   ```bash
+   git fetch origin tag v0.1.0-poc
+   git log --reverse --oneline 7d15122..v0.1.0-poc
+   ```
+   Reads like a narrative: `feat workspace foundation` → `feat shared schemas` → `feat framework foundation` → … → 5 trailing `fix CI ...` commits naming the surfacing path of each dogfood-caught bug. Or browse [PR #1's commits tab](https://github.com/drapala/transactionify/pull/1/commits).
+6. Run `dx --help` (or skim `packages/cli/src/dx/cli.py`) to see the surface in <60 seconds
+7. Run [docs/PRE-MERGE-SETUP.md](docs/PRE-MERGE-SETUP.md) checklist if you want to reproduce the live demo
 
 The provenance chain (PDF → spec → ticket → commit) is the artifact. The code is the test that the chain is real.

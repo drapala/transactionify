@@ -58,7 +58,7 @@ Demo readiness: [docs/PRE-MERGE-SETUP.md](docs/PRE-MERGE-SETUP.md) lists the 6 p
 | Live ruleset on the fork (id 15575639) | `gh api /repos/drapala/transactionify/rulesets` |
 | **Integration pipeline GREEN on main** | https://github.com/drapala/transactionify/actions/runs/24969361226 |
 | Latest PR pipeline run (9/9 green) | https://github.com/drapala/transactionify/actions/runs/24969293862 |
-| 24-commit Work-ID chain (pre-squash tip) | tag `v0.1.0-poc` (sha `19f4d2a`); also visible at PR #1's commits tab |
+| 24-commit Work-ID prose (pre-squash) | `git fetch origin tag v0.1.0-poc && git log --reverse --oneline 7d15122..v0.1.0-poc` — reads as narrative (feat → fix surfacing path). Also at [PR #1 commits](https://github.com/drapala/transactionify/pull/1/commits). |
 | Pre-dispatch audit trail | commit `67e5e17` — 3 audit passes consolidated before any implementation commit |
 
 ---
