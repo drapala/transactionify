@@ -241,11 +241,18 @@ MIT (inherited from upstream Transactionify).
 
 If you are the reviewer and time is finite, read in this order:
 
-1. [docs/ADR/0001-golden-path.pdf](docs/ADR/0001-golden-path.pdf) (2 pages)
-2. [DEMO.md](DEMO.md) (live demo script — preview without running)
-3. `.kiro/specs/golden-path/{requirements,design,tasks}.md` (the spec chain)
-4. `git log --oneline main` (commits read like ticket prose)
-5. Run `dx --help` (or skim `packages/cli/src/dx/cli.py`) to see the surface in <60 seconds
-6. Run [PRE-MERGE-SETUP.md](PRE-MERGE-SETUP.md) checklist if you want to reproduce the live demo
+1. **[docs/ADR/0001-golden-path.pdf](docs/ADR/0001-golden-path.pdf)** — 2 pages, decisions table + trade-offs
+2. **[DEMO.md](DEMO.md)** — 15-minute live demo script (preview without running)
+3. **`.kiro/specs/golden-path/{requirements,design,tasks}.md`** — the spec chain
+4. **The 24-commit ticket trail.** Main was squash-merged for clean history; the per-ticket Work ID chain is preserved at the tag `v0.1.0-poc` (sha `19f4d2a`):
+   ```bash
+   git fetch origin tag v0.1.0-poc
+   git log --oneline 7d15122..v0.1.0-poc   # 24 commits, each a Work ID
+   ```
+   Or browse it on GitHub:
+   - PR #1's commits tab: https://github.com/drapala/transactionify/pull/1/commits
+   - Tag: https://github.com/drapala/transactionify/releases/tag/v0.1.0-poc
+5. **`dx --help`** (or skim `packages/cli/src/dx/cli.py`) — the CLI surface in <60 seconds
+6. **[PRE-MERGE-SETUP.md](PRE-MERGE-SETUP.md)** — checklist to reproduce the live demo locally
 
-The provenance chain (PDF → spec → ticket → commit) is the artifact. The code is the test that the chain is real.
+The provenance chain (PDF → spec → ticket → commit) is the artifact. The code is the test that the chain is real. Honest about the squash trade-off: clean main history costs the per-Work-ID `git log` view at the cost of one extra `git fetch tag` step.
