@@ -33,8 +33,8 @@ export function generateIntegrationPipeline(adapter: RuntimeAdapter, config: DxC
     env: { AWS_DEFAULT_REGION: "us-east-1" },
     steps: [
       CHECKOUT,
-      SETUP_NODE,
       SETUP_PNPM,
+      SETUP_NODE,
       SETUP_PYTHON,
       SETUP_UV,
       { name: "install deps (pnpm)", run: "pnpm install --frozen-lockfile" },
@@ -58,8 +58,8 @@ export function generateIntegrationPipeline(adapter: RuntimeAdapter, config: DxC
     env: { AWS_DEFAULT_REGION: "us-east-1" },
     steps: [
       CHECKOUT,
-      SETUP_NODE,
       SETUP_PNPM,
+      SETUP_NODE,
       { name: "install deps", run: "pnpm install --frozen-lockfile" },
       {
         name: "deploy-staging (synth-only at PoC fidelity)",
@@ -76,8 +76,8 @@ export function generateIntegrationPipeline(adapter: RuntimeAdapter, config: DxC
     env: { AWS_DEFAULT_REGION: "us-east-1" },
     steps: [
       CHECKOUT,
-      SETUP_NODE,
       SETUP_PNPM,
+      SETUP_NODE,
       { name: "install deps", run: "pnpm install --frozen-lockfile" },
       {
         name: "deploy-prod (synth-only at PoC fidelity)",

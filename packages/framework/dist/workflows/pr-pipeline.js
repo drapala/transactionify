@@ -87,8 +87,8 @@ function generatePrPipeline(adapter, config) {
         env: AWS_REGION_ENV,
         steps: [
             CHECKOUT,
-            SETUP_NODE,
             SETUP_PNPM,
+            SETUP_NODE,
             { name: "install deps", run: "pnpm install --frozen-lockfile" },
             (0, cdk_synth_1.cdkSynthStep)(),
         ],
@@ -100,8 +100,8 @@ function generatePrPipeline(adapter, config) {
         env: AWS_REGION_ENV,
         steps: [
             CHECKOUT,
-            SETUP_NODE,
             SETUP_PNPM,
+            SETUP_NODE,
             { name: "install deps", run: "pnpm install --frozen-lockfile" },
             (0, cdk_synth_1.sandboxVerifyStep)(),
         ],

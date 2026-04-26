@@ -114,8 +114,8 @@ export function generatePrPipeline(adapter: RuntimeAdapter, config: DxConfig): W
     env: AWS_REGION_ENV,
     steps: [
       CHECKOUT,
-      SETUP_NODE,
       SETUP_PNPM,
+      SETUP_NODE,
       { name: "install deps", run: "pnpm install --frozen-lockfile" },
       cdkSynthStep(),
     ],
@@ -128,8 +128,8 @@ export function generatePrPipeline(adapter: RuntimeAdapter, config: DxConfig): W
     env: AWS_REGION_ENV,
     steps: [
       CHECKOUT,
-      SETUP_NODE,
       SETUP_PNPM,
+      SETUP_NODE,
       { name: "install deps", run: "pnpm install --frozen-lockfile" },
       sandboxVerifyStep(),
     ],
