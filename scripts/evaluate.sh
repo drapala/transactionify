@@ -10,6 +10,16 @@
 
 set -euo pipefail
 
+# Local cache dirs so the script works in sandboxes where the default
+# ~/.cache/uv (or the pnpm store) is read-only or has permission issues.
+# Without this override, uv's cache-write fails and surfaces as a
+# misleading 'uv sync --frozen' error — the evaluator would mistake it
+# for a lockfile drift bug. Same precaution for pnpm. Honors any env
+# override the evaluator already set.
+export UV_CACHE_DIR="${UV_CACHE_DIR:-${TMPDIR:-/tmp}/transactionify-uv-cache}"
+export PNPM_STORE_DIR="${PNPM_STORE_DIR:-${TMPDIR:-/tmp}/transactionify-pnpm-store}"
+mkdir -p "$UV_CACHE_DIR" "$PNPM_STORE_DIR"
+
 red()    { printf '\033[0;31m✗ %s\033[0m\n' "$*" >&2; }
 green()  { printf '\033[0;32m✓ %s\033[0m\n' "$*"; }
 yellow() { printf '\033[0;33m· %s\033[0m\n' "$*"; }
