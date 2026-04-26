@@ -25,6 +25,12 @@ extend-exclude = [
     "cdk.out",
     "node_modules",
     ".venv",
+    # failing-repo is the intentional-failure test fixture for `dx check`
+    # (see test_check.py::test_check_fails_in_failing_repo). It MUST emit a
+    # ruff violation when scanned from inside its own dir, but we don't want
+    # the global `dx check lint` (which scans from the repo root) to trip
+    # over it — the fixture's whole point is local-scope failure.
+    "packages/cli/tests/fixtures/failing-repo",
 ]
 
 [tool.ruff.lint]
