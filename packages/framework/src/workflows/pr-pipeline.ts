@@ -31,6 +31,25 @@ const SETUP_PYTHON = {
 
 const SETUP_UV = { name: "install uv", run: "pipx install uv" };
 
+// `uv sync` installs into .venv/bin, which is NOT on PATH by default in CI.
+// Installing dev tooling to the system Python (managed by actions/setup-python)
+// puts ruff/pytest/etc on PATH for the subsequent step's bare invocation.
+// CHECK_MANIFEST stays at `ruff check .` (no `uv run` prefix); local devs get
+// the same binaries via `uv sync` + their venv activation, or via
+// `uv tool install ruff` for a global isolated copy.
+const INSTALL_PY_TOOLING = {
+  name: "install python dev tooling to system",
+  run: "uv pip install --system ruff pytest pytest-mock pytest-cov hypothesis jsonschema pyyaml typer rich jinja2 schemathesis",
+};
+
+// Install fork-side test deps too (boto3 stubs, moto, etc) so unit-tests
+// can collect against test/unit/src/python/requirements.txt without needing
+// the candidate to maintain a synced super-list.
+const INSTALL_FORK_TEST_DEPS = {
+  name: "install fork test requirements",
+  run: "if [ -f test/unit/src/python/requirements.txt ]; then uv pip install --system -r test/unit/src/python/requirements.txt; fi",
+};
+
 const SETUP_NODE = {
   name: "setup Node",
   uses: "actions/setup-node@v4",
@@ -53,7 +72,7 @@ function pythonJob(id: string, needs: string[], stepFn: () => any): WorkflowJob 
     runsOn: RUNS_ON,
     needs,
     env: AWS_REGION_ENV,
-    steps: [CHECKOUT, SETUP_PYTHON, SETUP_UV, { name: "uv sync", run: "uv sync --all-packages" }, stepFn()],
+    steps: [CHECKOUT, SETUP_PYTHON, SETUP_UV, INSTALL_PY_TOOLING, INSTALL_FORK_TEST_DEPS, stepFn()],
   };
 }
 
@@ -63,7 +82,7 @@ export function generatePrPipeline(adapter: RuntimeAdapter, config: DxConfig): W
   const lint: WorkflowJob = {
     id: "lint",
     runsOn: RUNS_ON,
-    steps: [CHECKOUT, SETUP_PYTHON, SETUP_UV, { name: "uv sync", run: "uv sync --all-packages" }, lintStep()],
+    steps: [CHECKOUT, SETUP_PYTHON, SETUP_UV, INSTALL_PY_TOOLING, lintStep()],
   };
 
   const workIdPrTitle: WorkflowJob = {

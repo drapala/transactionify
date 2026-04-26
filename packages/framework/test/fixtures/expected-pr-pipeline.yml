@@ -20,8 +20,10 @@ jobs:
           python-version: '3.11'
       - name: install uv
         run: pipx install uv
-      - name: uv sync
-        run: uv sync --all-packages
+      - name: install python dev tooling to system
+        run: >-
+          uv pip install --system ruff pytest pytest-mock pytest-cov hypothesis jsonschema pyyaml typer rich jinja2
+          schemathesis
       - name: lint
         run: ruff check .
   work-id-pr-title:
@@ -56,8 +58,14 @@ jobs:
           python-version: '3.11'
       - name: install uv
         run: pipx install uv
-      - name: uv sync
-        run: uv sync --all-packages
+      - name: install python dev tooling to system
+        run: >-
+          uv pip install --system ruff pytest pytest-mock pytest-cov hypothesis jsonschema pyyaml typer rich jinja2
+          schemathesis
+      - name: install fork test requirements
+        run: >-
+          if [ -f test/unit/src/python/requirements.txt ]; then uv pip install --system -r
+          test/unit/src/python/requirements.txt; fi
       - name: unit tests
         run: pytest -x -q -m not pbt
         working-directory: test/unit/src/python
@@ -78,8 +86,14 @@ jobs:
           python-version: '3.11'
       - name: install uv
         run: pipx install uv
-      - name: uv sync
-        run: uv sync --all-packages
+      - name: install python dev tooling to system
+        run: >-
+          uv pip install --system ruff pytest pytest-mock pytest-cov hypothesis jsonschema pyyaml typer rich jinja2
+          schemathesis
+      - name: install fork test requirements
+        run: >-
+          if [ -f test/unit/src/python/requirements.txt ]; then uv pip install --system -r
+          test/unit/src/python/requirements.txt; fi
       - name: PBT (Hypothesis)
         run: pytest -x -q -m pbt
         working-directory: test/unit/src/python
@@ -100,8 +114,14 @@ jobs:
           python-version: '3.11'
       - name: install uv
         run: pipx install uv
-      - name: uv sync
-        run: uv sync --all-packages
+      - name: install python dev tooling to system
+        run: >-
+          uv pip install --system ruff pytest pytest-mock pytest-cov hypothesis jsonschema pyyaml typer rich jinja2
+          schemathesis
+      - name: install fork test requirements
+        run: >-
+          if [ -f test/unit/src/python/requirements.txt ]; then uv pip install --system -r
+          test/unit/src/python/requirements.txt; fi
       - name: contract (schemathesis)
         run: schemathesis run openapi.yaml --checks=all
   ai-review:
