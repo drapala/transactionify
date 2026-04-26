@@ -36,7 +36,7 @@ jobs:
       - name: install deps (uv)
         run: uv sync --all-packages
       - name: package (RuntimeAdapter.packageCommand)
-        run: sh -c pnpm cdk synth --quiet && tar -czf service-package.tgz cdk.out/
+        run: sh -c npx cdk synth --quiet && tar -czf service-package.tgz cdk.out/
       - name: upload service-package artifact
         uses: actions/upload-artifact@v4
         with:
@@ -86,7 +86,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: deploy-staging (synth-only at PoC fidelity)
         run: >-
-          pnpm cdk synth --context account=000000000000 --context region=us-east-1 --quiet && echo 'synth ok — real
+          npx cdk synth --context account=000000000000 --context region=us-east-1 --quiet && echo 'synth ok — real
           deploy requires OIDC (ADR Future Integrations)'
   deploy-prod:
     runs-on: ubuntu-latest
@@ -113,7 +113,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: deploy-prod (synth-only at PoC fidelity)
         run: >-
-          pnpm cdk synth --context account=111111111111 --context region=us-east-1 --quiet && echo 'synth ok — real
+          npx cdk synth --context account=111111111111 --context region=us-east-1 --quiet && echo 'synth ok — real
           deploy requires OIDC (ADR Future Integrations)'
   dora-emit:
     runs-on: ubuntu-latest
