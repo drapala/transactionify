@@ -182,7 +182,7 @@ docs/
   LOCAL-ENV.md           ← LocalStack offline path (PDF p.4 §3.a verbatim)
   adapters/<stack>.md    ← per-stack contract + 2-day implementation guide
   RFC-template.md        ← propose larger changes
-demo/                    ← live demo scripts (≤15 min, 3 acts)
+scripts/demo/             ← live demo scripts (≤15 min, 3 acts)
 src/python/, lib/, test/ ← Transactionify reference service (integration case study)
 ```
 
@@ -198,8 +198,8 @@ src/python/, lib/, test/ ← Transactionify reference service (integration case 
 | [docs/DORA.md](docs/DORA.md) | metric consumers | exact formulas + comparability claim |
 | [docs/LOCAL-ENV.md](docs/LOCAL-ENV.md) | service authors | 5 commands to a seeded LocalStack |
 | [docs/adapters/python.md](docs/adapters/python.md) | Python team | real adapter contract + PBT/lambda conventions |
-| [DEMO.md](DEMO.md) | reviewers | 15-minute live demo script (3 acts) |
-| [PRE-MERGE-SETUP.md](PRE-MERGE-SETUP.md) | reviewers | what to set up locally before reproducing the demo |
+| [docs/DEMO.md](docs/DEMO.md) | reviewers | 15-minute live demo script (3 acts) |
+| [docs/PRE-MERGE-SETUP.md](docs/PRE-MERGE-SETUP.md) | reviewers | what to set up locally before reproducing the demo |
 | [.kiro/steering/golden-path.md](.kiro/steering/golden-path.md) | AI agents | system prompt — read first for any agent dispatch |
 
 ---
@@ -239,13 +239,16 @@ MIT (inherited from upstream Transactionify).
 
 ## How to evaluate this PoC
 
+The fastest path is **[EVALUATION.md](EVALUATION.md)** — the reviewer cockpit. It has three reading paths (90s / 5min / 15min), a one-command offline evaluator (`./scripts/evaluate.sh`), and live-evidence links (PR pipeline green, integration pipeline green, ruleset live, DORA artifact). Start there; the table below is the long-form version.
+
 If you are the reviewer and time is finite, read in this order:
 
-1. [docs/ADR/0001-golden-path.pdf](docs/ADR/0001-golden-path.pdf) (2 pages)
-2. [DEMO.md](DEMO.md) (live demo script — preview without running)
+1. [EVALUATION.md](EVALUATION.md) — reviewer cockpit (90-second / 5-minute / 15-minute paths)
+2. [docs/ADR/0001-golden-path.pdf](docs/ADR/0001-golden-path.pdf) (2 pages)
+3. [docs/DEMO.md](docs/DEMO.md) (live demo script — preview without running)
 3. `.kiro/specs/golden-path/{requirements,design,tasks}.md` (the spec chain)
 4. `git log --oneline main` (commits read like ticket prose)
 5. Run `dx --help` (or skim `packages/cli/src/dx/cli.py`) to see the surface in <60 seconds
-6. Run [PRE-MERGE-SETUP.md](PRE-MERGE-SETUP.md) checklist if you want to reproduce the live demo
+6. Run [docs/PRE-MERGE-SETUP.md](docs/PRE-MERGE-SETUP.md) checklist if you want to reproduce the live demo
 
 The provenance chain (PDF → spec → ticket → commit) is the artifact. The code is the test that the chain is real.
