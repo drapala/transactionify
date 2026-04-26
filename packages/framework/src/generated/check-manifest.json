@@ -51,9 +51,9 @@
     "name": "unit_tests"
   },
   "work_id": {
-    "branch_pattern": "^(LL|GP)-[0-9]+-[a-z0-9-]+$",
-    "extract_pattern": "(LL|GP)-[0-9]+",
+    "branch_pattern": "^(LL|GP)-[0-9]+[a-z]?-[a-z0-9-]+$",
+    "extract_pattern": "(LL|GP)-[0-9]+[a-z]?",
     "name": "work_id",
-    "subject_pattern": "^(LL|GP)-[0-9]+: .+$"
+    "subject_pattern": "^(LL|GP)-[0-9]+[a-z]?: .+$"
   }
 }

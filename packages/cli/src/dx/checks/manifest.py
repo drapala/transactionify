@@ -45,12 +45,16 @@ CHECK_MANIFEST: dict[str, dict] = {
     },
     "work_id": {
         "name": "work_id",
-        # The same regex everywhere, three formats per context:
-        #   extract_pattern  : raw id (`GP-123`)         — for parsing PR titles / commit subjects
-        #   branch_pattern   : id + dash slug             — for branch names
-        #   subject_pattern  : id + colon + description   — for commit subjects + PR titles
-        "extract_pattern": r"(LL|GP)-[0-9]+",
-        "branch_pattern": r"^(LL|GP)-[0-9]+-[a-z0-9-]+$",
-        "subject_pattern": r"^(LL|GP)-[0-9]+: .+$",
+        # The same regex everywhere, three formats per context.
+        # Trailing [a-z]? permits sub-task suffixes (GP-002b, GP-009a/c/d in
+        # tasks.md). The platform's own spec chain uses them, so the canonical
+        # regex must accept them — otherwise the platform fails to apply its
+        # own conventions to its own commits.
+        #   extract_pattern  : raw id (GP-123 or GP-009a) — parsing PR titles / subjects
+        #   branch_pattern   : id + dash slug             — branch names
+        #   subject_pattern  : id + colon + description   — commit subjects + PR titles
+        "extract_pattern": r"(LL|GP)-[0-9]+[a-z]?",
+        "branch_pattern": r"^(LL|GP)-[0-9]+[a-z]?-[a-z0-9-]+$",
+        "subject_pattern": r"^(LL|GP)-[0-9]+[a-z]?: .+$",
     },
 }

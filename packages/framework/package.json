@@ -11,7 +11,8 @@
     "test": "vitest run",
     "codegen": "tsx scripts/codegen-types.ts",
     "gen-fixtures": "tsx scripts/gen-fixtures.ts",
-    "gen-workflows": "tsx scripts/gen-fixtures.ts"
+    "gen-workflows": "tsx scripts/gen-fixtures.ts",
+    "prepare": "tsc"
   },
   "dependencies": {
     "js-yaml": "^4.1.0"

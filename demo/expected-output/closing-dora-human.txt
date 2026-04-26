@@ -1,0 +1,13 @@
+           DORA — 4 PDF metrics           
+┏━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━┓
+┃ metric                ┃ value          ┃
+┡━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━┩
+│ Deployment Frequency  │ 0.1429 per day │
+│ Lead Time for Changes │ 23.0 min       │
+│ Change Failure Rate   │ 50.00%         │
+│ Mean Time to Restore  │ 1.3 h          │
+├───────────────────────┼────────────────┤
+│ window                │ 7d             │
+│ events seen           │ 2              │
+│ events used           │ 2              │
+└───────────────────────┴────────────────┘

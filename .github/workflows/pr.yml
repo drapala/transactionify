@@ -32,7 +32,7 @@ jobs:
       - name: work-id PR title check
         run: |-
           title="$PR_TITLE"
-          pattern='^(LL|GP)-[0-9]+: .+$'
+          pattern='^(LL|GP)-[0-9]+[a-z]?: .+$'
           if [[ ! "$title" =~ $pattern ]]; then
             echo "::error::PR title '$title' must match $pattern (e.g. 'GP-123: feat add validator'). See .kiro/steering/golden-path.md." 
             exit 1

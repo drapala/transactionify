@@ -42,5 +42,4 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"test/unit/**/*.py" = ["F401", "F811"]                       # test fixtures may import unused / re-import
-"packages/cli/tests/fixtures/failing-repo/**.py" = ["F401"]   # fixture is INTENTIONALLY F401
+"test/unit/**/*.py" = ["F401", "F811"]   # test fixtures may import unused / re-import

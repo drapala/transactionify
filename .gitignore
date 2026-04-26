@@ -24,9 +24,16 @@ htmlcov/
 # CDK
 .cdk.staging/
 cdk.out/
-*.js
-*.d.ts
 node_modules/
+
+# JS/TS build outputs from CDK at repo root (Transactionify CDK app);
+# explicit negations below make the framework's `dist/` shippable.
+/*.js
+/*.d.ts
+/bin/*.js
+/bin/*.d.ts
+/lib/*.js
+/lib/*.d.ts
 
 # IDE
 .vscode/
@@ -38,9 +45,14 @@ node_modules/
 .DS_Store
 Thumbs.db
 
-# TypeScript build outputs
+# TypeScript build outputs (default-ignored). The framework's dist/ is
+# explicitly negated below because consumers install from GitHub via
+# `pnpm add github:user/repo#path:packages/framework` and expect compiled
+# JS + .d.ts to ship in the package.
 dist/
 *.tsbuildinfo
+!packages/framework/dist/
+!packages/framework/dist/**
 
 # Test fixtures that bootstrap their own .git dynamically
 packages/cli/tests/fixtures/branched-repo/.git/
@@ -49,3 +61,4 @@ packages/cli/tests/fixtures/branched-repo/a.txt
 # Candidate private scratchpad (see CLAUDE.md memory + Obsidian vault for narrative source)
 docs/superpowers/
 .docker/.env.local
+

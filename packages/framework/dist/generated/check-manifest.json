@@ -1,0 +1,59 @@
+{
+    "contract": {
+        "args": [
+            "run",
+            "openapi.yaml",
+            "--checks=all"
+        ],
+        "cmd": "schemathesis",
+        "exit_codes_passing": [
+            0
+        ],
+        "name": "contract"
+    },
+    "lint": {
+        "args": [
+            "check",
+            "."
+        ],
+        "cmd": "ruff",
+        "exit_codes_passing": [
+            0
+        ],
+        "name": "lint"
+    },
+    "pbt": {
+        "args": [
+            "-x",
+            "-q",
+            "-m",
+            "pbt"
+        ],
+        "cmd": "pytest",
+        "exit_codes_passing": [
+            0,
+            5
+        ],
+        "name": "pbt"
+    },
+    "unit_tests": {
+        "args": [
+            "-x",
+            "-q",
+            "-m",
+            "not pbt"
+        ],
+        "cmd": "pytest",
+        "exit_codes_passing": [
+            0,
+            5
+        ],
+        "name": "unit_tests"
+    },
+    "work_id": {
+        "branch_pattern": "^(LL|GP)-[0-9]+-[a-z0-9-]+$",
+        "extract_pattern": "(LL|GP)-[0-9]+",
+        "name": "work_id",
+        "subject_pattern": "^(LL|GP)-[0-9]+: .+$"
+    }
+}
