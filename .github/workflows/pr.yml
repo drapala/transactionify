@@ -166,7 +166,7 @@ jobs:
       - name: install deps
         run: pnpm install --frozen-lockfile
       - name: cdk synth
-        run: npx cdk synth --quiet
+        run: npx tsc -p tsconfig.cdk.json && npx cdk synth --quiet
   sandbox-verify:
     runs-on: ubuntu-latest
     needs:
@@ -197,6 +197,8 @@ jobs:
           # fidelity — real cloud deploy is the ADR Future Integrations evolution path
 
           # (requires OIDC + sandbox AWS account, ~1d of plumbing).
+
+          npx tsc -p tsconfig.cdk.json
 
           npx cdk synth --context account=000000000000 --context region=us-east-1 --quiet
 
@@ -233,34 +235,27 @@ jobs:
 
           FINISHED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-          WORK_ID=$(printf "%s" "$RAW_TITLE" | grep -oE "(LL|GP)-[0-9]+" | head -1 || echo "GP-0")
+          WORK_ID=$(printf "%s" "$RAW_TITLE" | grep -oE "(LL|GP)-[0-9]+[a-z]?" | head -1 || echo "GP-0")
 
           CHANGE_SUMMARY=$(printf "%s" "$RAW_TITLE" | head -c 240)
 
           mkdir -p dora-events
 
-          cat > dora-events/event.json <<JSON
-
-          {
-            "event_id": "$EVENT_ID",
-            "schema_version": "1.0.0",
-            "event_type": "pipeline_run",
-            "service": "transactionify",
-            "repository": "${{ github.repository }}",
-            "commit_sha": "${{ github.sha }}",
-            "actor": "${{ github.actor }}",
-            "work_id": "$WORK_ID",
-            "change_summary": "$CHANGE_SUMMARY",
-            "outcome": "$OUTCOME",
-            "started_at": "$STARTED_AT",
-            "finished_at": "$FINISHED_AT",
-            "source": "ci",
-            "run_id": "${{ github.run_id }}",
-            "source_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          }
-
-          JSON
-
+          jq -n \
+            --arg event_id "$EVENT_ID" \
+            --arg event_type "pipeline_run" \
+            --arg service "transactionify" \
+            --arg repository "${{ github.repository }}" \
+            --arg commit_sha "${{ github.sha }}" \
+            --arg actor "${{ github.actor }}" \
+            --arg work_id "$WORK_ID" \
+            --arg change_summary "$CHANGE_SUMMARY" \
+            --arg outcome "$OUTCOME" \
+            --arg started_at "$STARTED_AT" \
+            --arg finished_at "$FINISHED_AT" \
+            --arg run_id "${{ github.run_id }}" \
+            --arg source_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{event_id: $event_id, schema_version: "1.0.0", event_type: $event_type, service: $service, repository: $repository, commit_sha: $commit_sha, actor: $actor, work_id: $work_id, change_summary: $change_summary, outcome: $outcome, started_at: $started_at, finished_at: $finished_at, source: "ci", run_id: $run_id, source_url: $source_url}' > dora-events/event.json
           python3 -m pip install --quiet jsonschema
 
           python3 -c 'import json,sys;from jsonschema import
