@@ -67,7 +67,7 @@ jobs:
           if [ -f test/unit/src/python/requirements.txt ]; then uv pip install --system -r
           test/unit/src/python/requirements.txt; fi
       - name: unit tests
-        run: pytest -x -q -m not pbt
+        run: pytest -x -q -m 'not pbt'
         working-directory: test/unit/src/python
   pbt:
     runs-on: ubuntu-latest
