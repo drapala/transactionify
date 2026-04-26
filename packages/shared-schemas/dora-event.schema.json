@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://golden-path.example.com/schemas/dora-event.schema.json",
+  "title": "DORA raw event (v1)",
+  "description": "Raw fact emitted by the platform — pipeline_run | deployment. Aggregated metrics (Deployment Frequency, Lead Time for Changes, Change Failure Rate, MTTR) are derived downstream from these events; they are NOT properties of a single event.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_id",
+    "schema_version",
+    "event_type",
+    "service",
+    "repository",
+    "commit_sha",
+    "actor",
+    "work_id",
+    "change_summary",
+    "outcome",
+    "started_at",
+    "finished_at"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "description": "Stable UUIDv7 generated at emission time. The MTTR aggregator joins on this id via recovered_from_failure_id.",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": ["pipeline_run", "deployment"]
+    },
+    "service": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Logical service name (matches Backstage catalog-info.metadata.name)."
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+      "description": "owner/repo — answers WHERE."
+    },
+    "commit_sha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,40}$"
+    },
+    "actor": {
+      "type": "string",
+      "minLength": 1,
+      "description": "GitHub username or service account — answers WHO."
+    },
+    "work_id": {
+      "type": "string",
+      "pattern": "^(LL|GP)-[0-9]+$",
+      "description": "Links the event to its originating ticket — answers WHY."
+    },
+    "change_summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 240,
+      "description": "Human-readable summary — answers WHAT (with event_type + service + commit_sha)."
+    },
+    "reason": {
+      "type": "string",
+      "description": "Optional free-form reason — supplementary WHY."
+    },
+    "outcome": {
+      "type": "string",
+      "enum": ["success", "failure", "cancelled"]
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO8601 UTC — answers WHEN (start)."
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO8601 UTC — answers WHEN (end)."
+    },
+    "source": {
+      "type": "string",
+      "enum": ["ci", "local", "manual"],
+      "description": "Where the event was emitted. CI events have additional required fields."
+    },
+    "run_id": {
+      "type": "string",
+      "description": "GitHub Actions workflow run id (required when source: ci)."
+    },
+    "source_url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Link to the workflow run (required when source: ci)."
+    },
+    "commit_authored_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO8601 UTC — when the commit was authored. Required on deployment events; downstream Lead Time = finished_at - commit_authored_at."
+    },
+    "is_rework": {
+      "type": "boolean",
+      "description": "On deployment events: true when this deploy recovers from a prior failed deploy. Aggregator computes MTTR from rework pairs."
+    },
+    "recovered_from_failure_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+      "description": "On rework deployment events: the event_id of the prior failed deployment this one recovers from."
+    },
+    "environment": {
+      "type": "string",
+      "enum": ["staging", "prod", "sandbox"]
+    },
+    "labels": {
+      "type": "object",
+      "description": "Optional free-form key/value labels (avoid putting load-bearing audit fields here).",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "source": { "const": "ci" } },
+        "required": ["source"]
+      },
+      "then": {
+        "required": ["run_id", "source_url"]
+      }
+    },
+    {
+      "if": {
+        "properties": { "event_type": { "const": "deployment" } },
+        "required": ["event_type"]
+      },
+      "then": {
+        "required": ["commit_authored_at"]
+      }
+    }
+  ]
+}

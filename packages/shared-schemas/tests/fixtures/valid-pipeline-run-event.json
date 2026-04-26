@@ -1,0 +1,17 @@
+{
+  "event_id": "0192f7a1-8b3c-7d4e-9abc-1234567890ab",
+  "schema_version": "1.0.0",
+  "event_type": "pipeline_run",
+  "service": "transactionify",
+  "repository": "drapala/transactionify",
+  "commit_sha": "a1b2c3d4e5f6789012345678901234567890abcd",
+  "actor": "drapala",
+  "work_id": "GP-001",
+  "change_summary": "shared schemas — DORA event v1 + .dx.yaml",
+  "outcome": "success",
+  "started_at": "2026-04-26T12:00:00Z",
+  "finished_at": "2026-04-26T12:03:42Z",
+  "source": "ci",
+  "run_id": "8123456789",
+  "source_url": "https://github.com/drapala/transactionify/actions/runs/8123456789"
+}

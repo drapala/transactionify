@@ -1,0 +1,13 @@
+{
+  "name": "@golden-path/shared-schemas",
+  "version": "0.1.0",
+  "private": true,
+  "description": "JSON Schema contracts shared between packages/cli (Python) and packages/framework (TypeScript). Source of truth.",
+  "files": [
+    "dora-event.schema.json",
+    "dx-config.schema.json"
+  ],
+  "scripts": {
+    "codegen": "echo 'shared-schemas: codegen is consumer-side (cli reads JSON directly; framework codegens TS types in GP-005). Nothing to do here.' && exit 0"
+  }
+}

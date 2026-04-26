@@ -1,0 +1,21 @@
+{
+  "event_id": "0192f7b2-9c4d-7e5f-abcd-234567890123",
+  "schema_version": "1.0.0",
+  "event_type": "deployment",
+  "service": "transactionify",
+  "repository": "drapala/transactionify",
+  "commit_sha": "fedcba9876543210fedcba9876543210fedcba98",
+  "actor": "drapala",
+  "work_id": "GP-009",
+  "change_summary": "redeploy after staging smoke failure",
+  "outcome": "success",
+  "started_at": "2026-04-26T13:10:00Z",
+  "finished_at": "2026-04-26T13:14:18Z",
+  "source": "ci",
+  "run_id": "8123456790",
+  "source_url": "https://github.com/drapala/transactionify/actions/runs/8123456790",
+  "commit_authored_at": "2026-04-26T13:05:00Z",
+  "is_rework": true,
+  "recovered_from_failure_id": "0192f7a1-8b3c-7d4e-9abc-1234567890ab",
+  "environment": "prod"
+}
