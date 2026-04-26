@@ -39,7 +39,10 @@ from dx.commands.init import init_command  # noqa: E402
 
 init_app = typer.Typer(help="Scaffold .dx.yaml + PR template + pre-push hook (GP-003).")
 init_app.callback(invoke_without_command=True)(init_command)
+from dx.commands import check as _check_module  # noqa: E402
+
 check_app = typer.Typer(help="Run lint, unit, PBT, contract, work_id checks (GP-004).")
+_check_module.register(check_app)
 branch_app = typer.Typer(help="Create a Work-ID-conformant branch (GP-002b).")
 pr_app = typer.Typer(help="Submit PR; validates branch + commits + title locally first (GP-002b).")
 governance_app = typer.Typer(help="Apply the platform GitHub ruleset (GP-008).")
@@ -61,11 +64,6 @@ def _stub(group: str) -> None:
         fix_hint=f"See .kiro/specs/golden-path/tasks.md — the ticket implementing `{group}` is the one to dispatch next.",
         exit_code=2,
     )
-
-
-@check_app.callback(invoke_without_command=True)
-def check_root() -> None:
-    _stub("check")
 
 
 @branch_app.callback(invoke_without_command=True)
