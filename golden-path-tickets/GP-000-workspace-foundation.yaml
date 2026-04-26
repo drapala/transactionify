@@ -1,0 +1,154 @@
+id: GP-000
+title: "Workspace foundation — pnpm + uv monorepo + base scripts"
+tier: A
+delegate: pipeline
+delegate_reason: "Pure scaffolding; AC = workspace tools recognize structure and base commands run."
+review_mode: standard
+blast_radius: medium
+stretch: false
+
+depends_on: []
+
+paths:
+  primary: pnpm-workspace.yaml
+  secondary:
+    - package.json
+    - pyproject.toml
+    - .python-version
+    - .nvmrc
+    - .gitignore
+    - .editorconfig
+    - README.md
+    # P1 audit follow-up — pnpm changesets configured for independent SemVer release path
+    # (production-form caveat in GP-010 promises packages would have independent SemVer
+    # cycles; without changesets, that promise is vapor. This ticket scaffolds the config
+    # files; actual release workflow is evolution path. ROI: closes Packaging Maturity
+    # evaluation criterion from "we plan to" to "we have the operational config for it".)
+    - .changeset/config.json
+    - .changeset/README.md
+  test:
+    - tests/workspace/test_workspace_health.sh
+  pre_existing:
+    # These artifacts ship in the fork BEFORE this ticket runs (committed during
+    # spec-first phase, before any implementation). This ticket's responsibility
+    # is to VERIFY their presence and integrate the workspace setup AROUND them
+    # — NOT to create or overwrite. Provenance-preserving.
+    - .kiro/steering/golden-path.md                       # agent steering (committed pre-dispatch)
+    - .kiro/specs/golden-path/requirements.md             # EARS user stories (committed pre-dispatch)
+    - .kiro/specs/golden-path/design.md                   # architecture + decisions (committed pre-dispatch)
+    - .kiro/specs/golden-path/tasks.md                    # 15 tasks (committed pre-dispatch)
+    - golden-path-tickets/*.yaml                          # operational form (committed pre-dispatch)
+    - golden-path-tickets/README.md                       # backlog index (committed pre-dispatch)
+    - golden-path-tickets/NOTE.md                         # editing protocol (committed pre-dispatch)
+    - docs/ADR/template.md                                # ADR template (committed pre-dispatch)
+    - docs/ADR/0002-rfc-process.md                        # placeholder ADR for RFC process (committed pre-dispatch)
+    - docs/RFC-template.md                                # RFC template (committed pre-dispatch)
+    - catalog-info.yaml                                   # Backstage catalog stub (committed pre-dispatch)
+    - docs/api/transactionify.bru                         # Bruno collection metadata (committed pre-dispatch)
+    - docs/api/{01-create-account,02-create-payment,03-get-balance,04-list-transactions}.bru
+    - docs/api/environments/{local,staging}.bru
+    - docs/api/README.md                                  # collection usage notes (committed pre-dispatch)
+
+gherkin:
+  - scenario: "pnpm recognizes the workspace and lockfile is generated + committed"
+    given:
+      - "pnpm-workspace.yaml lists packages: ['packages/*']"
+      - "root package.json declares pnpm version + private: true"
+      - "pnpm-lock.yaml does NOT exist yet (clean slate)"
+    when:
+      - "pnpm install runs at repo root (without --frozen-lockfile, since this is the bootstrap)"
+    then:
+      - "exit code is 0"
+      - "node_modules/ is created at root with workspace symlinks for packages/*"
+      - "pnpm-lock.yaml is generated"
+      - "pnpm-lock.yaml is committed in the same PR as part of the deliverable"
+      - "subsequent `pnpm install --frozen-lockfile` in CI succeeds (lockfile is now stable)"
+
+  - scenario: "uv recognizes the workspace and lockfile is generated + committed"
+    given:
+      - "pyproject.toml at root declares [tool.uv.workspace] members = ['packages/cli']"
+      - ".python-version pins a supported version (3.11+)"
+      - "uv.lock does NOT exist yet (clean slate)"
+    when:
+      - "uv sync runs at repo root (without --frozen, since this is the bootstrap)"
+    then:
+      - "exit code is 0"
+      - "uv.lock is generated"
+      - "uv.lock is committed in the same PR as part of the deliverable"
+      - "subsequent `uv sync --frozen` in CI succeeds"
+      - "uv tool install --editable packages/cli succeeds (smoke check, may be skipped if cli package is empty at GP-000 time)"
+
+  - scenario: "Root scripts are wired"
+    given:
+      - "root package.json scripts: build, test, codegen, gen-workflows"
+    when:
+      - "pnpm <script> --help is invoked"
+    then:
+      - "each script delegates to the appropriate workspace package via pnpm --filter"
+      - "scripts fail loudly (non-zero exit) when a target package is missing — no silent no-op"
+
+  - scenario: "Base dev tooling is available"
+    given:
+      - "root devDependencies + dev-deps in pyproject.toml"
+    when:
+      - "tests/workspace/test_workspace_health.sh runs"
+    then:
+      - "actionlint, jsonschema, ruff, pytest, prettier, typescript, vitest, pdfinfo (poppler-utils — required by GP-010 ADR page-count validation, P0-2) are all callable"
+      - "missing tools cause clear error messages naming the install command"
+
+  - scenario: "Pre-existing spec-first artifacts are verified, not overwritten"
+    given:
+      - "the fork contains .kiro/steering/golden-path.md and .kiro/specs/golden-path/{requirements,design,tasks}.md (committed during spec-first phase BEFORE this ticket runs)"
+      - "the fork contains golden-path-tickets/ with 15 active YAMLs + README.md + NOTE.md"
+      - "the fork contains docs/ADR/{template,0002-rfc-process}.md and docs/RFC-template.md"
+      - "the fork contains catalog-info.yaml at the repo root"
+      - "the fork contains docs/api/ with transactionify.bru + 4 endpoint .bru files + 2 environment files + README.md"
+    when:
+      - "this ticket runs (pipeline dispatch)"
+    then:
+      - "the agent does NOT modify any of the pre_existing files (paths.pre_existing list above is the source-of-truth — the agent treats them as read-only)"
+      - "if any pre_existing file is missing, the agent fails loud with a message naming the file (does not silently create — the spec-first commit chain establishes provenance, recreating these files mid-dispatch breaks it)"
+      - "validation grep confirms each pre_existing path is git-tracked (`git ls-files | grep -qE '^.kiro/specs/golden-path/requirements.md$'`) before this ticket's work begins"
+
+  - scenario: "pnpm changesets is configured for independent SemVer release path"
+    given:
+      - "the production-form caveat in GP-010's README states packages would have independent SemVer releases in production"
+    when:
+      - "this ticket scaffolds .changeset/config.json + .changeset/README.md"
+    then:
+      - ".changeset/config.json declares: changelog (e.g. @changesets/cli/changelog), commit: false (do not auto-commit), fixed: [], linked: [], access: 'public', baseBranch: 'main', updateInternalDependencies: 'patch', ignore: []"
+      - ".changeset/README.md documents how a contributor adds a changeset (`pnpm changeset add`) and how the platform team consumes them (`pnpm changeset version` to bump, `pnpm changeset publish` for the release workflow — out of PoC scope but config is operational)"
+      - "the config file is JSON-valid (jq parses it)"
+      - "ROI: this closes the Packaging Maturity evaluation criterion from 'we plan to' to 'we have the operational config for it'; in production the candidate would wire `pnpm changeset publish` into a release workflow; for the PoC the config alone is the evidence"
+
+out_of_scope:
+  - "CI configuration (handled per-package later)"
+  - "Renovate / dependabot config"
+  - "Pre-commit framework setup (lefthook lives in GP-003 hooks scaffold)"
+  - "Publishing config (this PoC consumes packages via workspace, not registry)"
+
+validation_commands:
+  - "test -f pnpm-workspace.yaml && test -f package.json && test -f pyproject.toml"
+  - "test -f pnpm-lock.yaml && test -f uv.lock  # lockfiles committed as part of this ticket"
+  - "pnpm install --frozen-lockfile  # passes only because the ticket commits the lockfile generated during bootstrap"
+  - "uv sync --frozen  # same"
+  - "pnpm run --help | grep -qE 'build|test|codegen|gen-workflows'"
+  - "bash tests/workspace/test_workspace_health.sh"
+  # Pre-existing spec-first artifacts must be present (provenance preservation)
+  - "test -f .kiro/steering/golden-path.md && test -f .kiro/specs/golden-path/requirements.md && test -f .kiro/specs/golden-path/design.md && test -f .kiro/specs/golden-path/tasks.md"
+  - "test -d golden-path-tickets && test \"$(ls golden-path-tickets/*.yaml | wc -l)\" -ge 15"
+  - "test -f docs/ADR/template.md && test -f docs/ADR/0002-rfc-process.md && test -f docs/RFC-template.md"
+  - "test -f catalog-info.yaml && test -f docs/api/transactionify.bru && test -f docs/api/README.md"
+  # pnpm changesets config (operational evidence for Packaging Maturity)
+  - "test -f .changeset/config.json && test -f .changeset/README.md"
+  - "jq -e '.commit == false and .access == \"public\" and (.baseBranch == \"main\" or .baseBranch == null)' .changeset/config.json"
+
+demo_signal: "Indirect — never shown in demo, but without GP-000 nothing else runs. README's install section assumes this works."
+
+notes: |
+  Foundational ticket added after audit identified that GP-002 / GP-005 assumed workspace
+  initialization without anyone owning it. Without this ticket, every downstream ticket
+  re-creates pnpm/uv setup in inconsistent ways.
+
+  Keep this ticket boring on purpose. The temptation is to add Renovate, Husky, prettier
+  configs, dependabot, etc. — defer all of those.

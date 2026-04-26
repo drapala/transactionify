@@ -1,0 +1,157 @@
+id: GP-006
+title: "RuntimeAdapter — interface + Python real + Go/Clojure/TypeScript stubs (PDF polyglot: 4 stacks)"
+tier: A
+delegate: hybrid
+delegate_reason: "Interface is a one-shot decision that ripples to every future stack. Python implementation and Go stub are pipeline-friendly after interface lands."
+review_mode: pre_pr_review
+blast_radius: high
+stretch: false
+
+depends_on:
+  - GP-005
+
+paths:
+  primary: packages/framework/src/adapters/runtime-adapter.ts
+  secondary:
+    - packages/framework/src/adapters/python.ts
+    - packages/framework/src/adapters/go.ts          # stub
+    - packages/framework/src/adapters/clojure.ts     # stub (PDF polyglot: Clojure)
+    - packages/framework/src/adapters/typescript.ts  # stub (PDF polyglot: TypeScript)
+    - packages/framework/src/adapters/registry.ts
+    - packages/framework/src/adapters/errors.ts
+    - docs/adapters/python.md
+    - docs/adapters/go.md
+    - docs/adapters/clojure.md
+    - docs/adapters/typescript.md
+  test:
+    - packages/framework/test/adapters/runtime-adapter.test.ts
+    - packages/framework/test/adapters/python.test.ts
+    - packages/framework/test/adapters/go-stub.test.ts
+    - packages/framework/test/adapters/clojure-stub.test.ts
+    - packages/framework/test/adapters/typescript-stub.test.ts
+    - packages/framework/test/adapters/registry.test.ts
+
+gherkin:
+  - scenario: "RuntimeAdapter interface declares the contract — including PBT as a distinct method"
+    given:
+      - "runtime-adapter.ts is the interface module"
+    when:
+      - "TS compilation of any adapter runs"
+    then:
+      - "every adapter implements at minimum: lintCommand(), unitTestCommand(), pbtCommand(), contractCommand(), packageCommand()"
+      - "each method returns {cmd: string, args: string[], cwd?: string} (structured, not raw shell strings)"
+      - "pbtCommand is a distinct method (not folded into unitTestCommand) so the workflow generator can emit a separate stage — PDF lists Unit Tests, PBT, and API Contract as three distinct deliverables"
+      - "interface is exported as the only public abstraction; concrete adapters are package-internal"
+
+  - scenario: "Python adapter returns ruff + pytest (unit) + Hypothesis-marked pytest (PBT) commands; packageCommand is service-shape aware"
+    given:
+      - "PythonAdapter is instantiated against a DxConfig that declares either service_shape: 'lambda' (default for Transactionify-style projects) or service_shape: 'wheel' (for distributable Python packages)"
+    when:
+      - "lintCommand(), unitTestCommand(), pbtCommand(), and packageCommand() are called"
+    then:
+      - "lintCommand returns {cmd: 'ruff', args: ['check', '.']}"
+      - "unitTestCommand returns {cmd: 'pytest', args: ['-x', '-q', '-m', 'not pbt'], cwd: <test_root>} where test_root is read from .dx.yaml.test_root (default: 'test/unit/src/python' for service_shape: lambda — fork's pytest.ini is at that path; default: 'tests' for service_shape: wheel). Without cwd, dx check from fork root would invoke pytest with no rootdir, and pytest auto-discovery would recurse into node_modules/cdk.out/etc. emitting errors. Local checks must reproduce CI behavior (Design Principle 2)."
+      - "pbtCommand returns {cmd: 'pytest', args: ['-x', '-q', '-m', 'pbt'], cwd: <test_root>} (same cwd convention as unitTestCommand; Hypothesis tests marked via @pytest.mark.pbt or a tests/pbt/ directory glob)"
+      - "packageCommand for service_shape: 'lambda' returns {cmd: 'sh', args: ['-c', 'pnpm cdk synth --quiet && tar -czf service-package.tgz cdk.out/'], cwd: '<repo root>'} — the artifact is the synthesized output BUNDLE. Note: CDK actually deploys per-asset zips (cdk.out/asset.<hash>.zip), not the tarball; the bundle is a packaging convenience for upload-artifact + attest-build-provenance@v1's single-subject contract. Per-asset attestation (one subject per asset zip via attest-build-provenance@v2's digest list) is documented in README §Roadmap as evolution path. The bundle attestation is honest about what it covers; it is NOT claimed to be 'what gets deployed'."
+      - "packageCommand for service_shape: 'wheel' returns {cmd: 'uv', args: ['build']} — for projects that DO have a pyproject.toml at root and ship as a Python wheel"
+      - "if service_shape is unset and the repo has no pyproject.toml AND no `cdk.json`, packageCommand throws a clear error: 'cannot determine package shape; declare service_shape in .dx.yaml (lambda | wheel)' — fail-loud rather than silently picking a strategy that breaks at runtime"
+      - "the convention (mark vs directory for PBT; lambda vs wheel for packaging) is documented in docs/adapters/python.md"
+
+  - scenario: "Go / Clojure / TypeScript adapters throw NotImplementedError with link to per-stack docs"
+    given:
+      - "GoAdapter, ClojureAdapter, and TypeScriptAdapter are each instantiated separately"
+    when:
+      - "any method on any of the three stub adapters is called"
+    then:
+      - "each throws NotImplementedError"
+      - "error message names the specific stack and points to the matching doc — e.g. 'Go adapter is a stub. See docs/adapters/go.md to implement.', 'Clojure adapter is a stub. See docs/adapters/clojure.md to implement.', 'TypeScript adapter is a stub. See docs/adapters/typescript.md to implement.'"
+      - "each error message references the runtime-adapter.ts interface contract so contributors know what to implement"
+      - "rationale: the PDF lists Python/Go/Clojure/TypeScript as the polyglot target. PythonAdapter is real; the other three are concrete stubs (not registry holes) so the registry resolves all four PDF-named stacks and the error is instructive, not absent"
+
+  - scenario: "Registry resolves all four PDF-named stacks; unknown stacks fail with InnerSource hint"
+    given:
+      - "registry maps: python → PythonAdapter, go → GoAdapter, clojure → ClojureAdapter, typescript → TypeScriptAdapter"
+    when:
+      - "registry.resolve('python') is called"
+    then:
+      - "returns a PythonAdapter instance"
+      - "registry.resolve('go'), registry.resolve('clojure'), registry.resolve('typescript') return their respective stub adapters (resolution succeeds; only method calls fail with NotImplementedError)"
+      - "registry.resolve('rust') throws UnsupportedStackError with message 'add an adapter to extend support; see docs/adapters/'"
+      - "test asserts the keys of the registry are exactly {python, go, clojure, typescript} — no PDF stack missing, no extra stack registered"
+
+  - scenario: "Per-stack doc files are present and explain the contract"
+    given:
+      - "docs/adapters/{python,go,clojure,typescript}.md all exist"
+    when:
+      - "a contributor reading any of the three stub docs (go/clojure/typescript) wants to implement the adapter"
+    then:
+      - "each stub doc states: the stack name, the RuntimeAdapter interface contract (pointing at runtime-adapter.ts), example commands the adapter SHOULD return for lint/unit/pbt/contract/package, and the file the contributor edits"
+      - "docs/adapters/python.md additionally documents the pbt mark vs directory convention used by PythonAdapter"
+      - "docs are short (~1 page each) — the goal is unblocking, not exhaustive reference"
+
+out_of_scope:
+  - "Real Go / Clojure / TypeScript adapter implementations (stubs only — same pattern across all three)"
+  - "Adapter discovery via plugin/dynamic load (future)"
+  - "Multi-stack-per-repo support (single stack per .dx.yaml for PoC)"
+  - "Caching adapter instances across calls"
+
+validation_commands:
+  - "pnpm --filter @golden-path/framework test packages/framework/test/adapters/"
+  - "pnpm --filter @golden-path/framework build && grep -q 'NotImplementedError' packages/framework/dist/adapters/go.js && grep -q 'NotImplementedError' packages/framework/dist/adapters/clojure.js && grep -q 'NotImplementedError' packages/framework/dist/adapters/typescript.js"
+  - "test -f docs/adapters/python.md && test -f docs/adapters/go.md && test -f docs/adapters/clojure.md && test -f docs/adapters/typescript.md"
+  - "for f in docs/adapters/go.md docs/adapters/clojure.md docs/adapters/typescript.md; do grep -q 'implement RuntimeAdapter' \"$f\" || { echo \"$f missing contract reference\"; exit 1; }; done"
+  # Registry keys must exactly match the four PDF-named stacks
+  - "pnpm --filter @golden-path/framework exec node -e \"const {registry}=require('./dist/adapters/registry'); const k=Object.keys(registry).sort().join(','); if(k!=='clojure,go,python,typescript') {console.error('registry keys:',k); process.exit(1)}\""
+
+demo_signal: "RuntimeAdapter interface visible (one file, ~30 lines); Python is real; Go/Clojure/TypeScript are stubs-with-instructive-errors. Polyglot defended in the registry shape (all four PDF stacks resolve), the docs (one page per stack), and the error path (instructive, not absent). Anchors the 'platform team avoids becoming a bottleneck' argument from the ADR Scalability section."
+
+notes: |
+  Polyglot scope (from PDF p.1): "the framework must support teams using
+  different languages (Python, Go, Clojure, TypeScript) within the same
+  infrastructure patterns." Earlier draft had only Python real + Go stub —
+  Clojure and TypeScript were absent from the registry, which would let the
+  CTO ask 'how does a TS team adopt this?' and get an empty answer. This
+  revision adds Clojure and TypeScript stubs with the same shape as Go: the
+  registry resolves all four, method calls fail with instructive errors, and
+  each stack has a 1-page doc. Implementation cost: ~30 lines of TypeScript +
+  3 short docs.
+
+  packageCommand service-shape awareness (post-audit fix):
+    The PythonAdapter cannot return `uv build` unconditionally — Transactionify
+    is a Lambda service with no pyproject.toml in src/python/, so uv build
+    fails with `error: No pyproject.toml found`. The integration pipeline's
+    build job (GP-007) calls packageCommand() and uploads the result as the
+    artifact attest references; if the build fails, attestation has no
+    subject-path and `actions/attest-build-provenance@v1` errors at runtime.
+
+    Solution: PythonAdapter reads service_shape from .dx.yaml. Two values:
+      - 'lambda': package is the CDK synth output bundle — `pnpm cdk synth`
+        then tar cdk.out/. NOTE on attestation honesty (P0-4 audit fix): the
+        tarball is a PACKAGING CONVENIENCE for upload-artifact; CDK deploys
+        each cdk.out/asset.<hash>.zip individually to S3 and from there to
+        Lambda. The bundle attestation covers the synthesis output as a
+        whole; per-asset attestation (one subject per asset zip, or one
+        subject with a digest list) is documented in the ADR Future
+        Integrations as evolution path. Do NOT defend the bundle attestation
+        as 'this is what gets deployed' — it isn't; it's the snapshot of
+        synthesis output that produced the deployed assets.
+      - 'wheel':  for distributable Python packages with pyproject.toml at
+        root. `uv build`. Same as the original adapter contract.
+
+    If service_shape is unset, the adapter fails loud with an actionable
+    error message naming the choice. This forces .dx.yaml to declare intent
+    rather than the adapter guessing.
+
+    The Transactionify fork's .dx.yaml (committed by GP-009a) sets
+    service_shape: 'lambda'.
+
+  Interface design: return structured {cmd, args} instead of raw shell strings.
+  Avoids quoting bugs and makes commands testable. Each stub's error message
+  is the documentation surface for any future contributor — write it like
+  onboarding copy.
+
+  The four stub docs share a template: "<Stack> adapter — stub today; here is
+  the RuntimeAdapter interface contract; here are the commands the adapter
+  SHOULD return for lint/unit/pbt/contract/package; the file you edit is
+  packages/framework/src/adapters/<stack>.ts". This is the single page that
+  unblocks an InnerSource contribution per Evaluation Criterion #5.

@@ -1,0 +1,129 @@
+id: GP-003
+title: "dx init — scaffold .dx.yaml + PR template + pre-push hook"
+tier: A
+delegate: pipeline
+delegate_reason: "Bounded scope: file scaffolding from templates. AC = files present and valid."
+review_mode: standard
+blast_radius: medium
+stretch: false
+
+depends_on:
+  - GP-001
+  - GP-002
+
+paths:
+  primary: packages/cli/src/dx/commands/init.py
+  secondary:
+    - packages/cli/src/dx/templates/dx-yaml.j2
+    - packages/cli/src/dx/templates/pr-template.md.j2
+    - packages/cli/src/dx/templates/pre-push.sh.j2
+    - packages/cli/src/dx/_yaml_validate.py
+  test:
+    - packages/cli/tests/test_init.py
+    - packages/cli/tests/fixtures/clean-repo/.gitkeep
+
+gherkin:
+  - scenario: "dx init in a clean repo creates the three files; pre-push hook runs lint + work_id (PDF: 'mandatory tests/linting before push')"
+    given:
+      - "an empty git repo without .dx.yaml"
+    when:
+      - "the user runs `dx init` (interactive prompts skipped via --defaults or --json)"
+    then:
+      - ".dx.yaml is created at repo root"
+      - ".github/pull_request_template.md is created"
+      - ".git/hooks/pre-push is created and executable (mode 0755)"
+      - "the generated pre-push hook invokes BOTH `dx check work_id` AND `dx check lint` (in that order; work_id is fast and fails first if branch/commit names are wrong; lint runs after to satisfy the PDF p.4 §3.b literal phrase 'mandatory tests/linting before code is pushed'). Unit tests are NOT in pre-push — they run in CI on push (deliberate scoping: pre-push is for fast, deterministic checks; full test suite would make every git push slow). The ADR documents this scoping decision."
+      - "exit code is 0"
+
+  - scenario: "Generated .dx.yaml validates against the schema"
+    given:
+      - "GP-001's dx-config.schema.json"
+      - "dx init was just run"
+    when:
+      - "the generated .dx.yaml is validated against the schema"
+    then:
+      - "validation passes"
+      - "stack + service_shape are populated based on detected files in the following PRECEDENCE ORDER (P0-6 audit fix — bare 'package.json → node' was wrong against any Lambda-on-CDK fork like Transactionify, where package.json holds CDK TypeScript IaC deps but the actual service is Python):"
+      - "(1) cdk.json + src/python/<package>/ → stack: python, service_shape: lambda  # CDK app with Python Lambda code; package.json (if present) describes IaC deps, not the service"
+      - "(2) cdk.json + src/<lang>/ for go|clojure|typescript → stack: <lang>, service_shape: lambda  # symmetric to (1) when adapter implementations land for those stacks"
+      - "(3) pyproject.toml at root (no cdk.json) → stack: python, service_shape: wheel  # distributable Python package"
+      - "(4) package.json at root (no cdk.json, no pyproject.toml) → stack: node, service_shape: wheel  # distributable Node package"
+      - "(5) ambiguity (e.g. pyproject.toml AND package.json AND no cdk.json) → exit non-zero with actionable error: 'cannot disambiguate stack; declare via --stack and --service-shape flags'"
+      - "the heuristic order means dx init against the Transactionify fork (which has cdk.json + src/python/transactionify/ + package.json for CDK deps) correctly produces stack: python, service_shape: lambda — without this precedence, package.json's presence would short-circuit detection to 'node' and GP-009a's expected `.dx.yaml` shape would not match reality"
+
+  - scenario: "dx init refuses to overwrite without --force"
+    given:
+      - "a repo with an existing .dx.yaml"
+    when:
+      - "user runs `dx init` without --force"
+    then:
+      - "exit code is non-zero"
+      - "stderr explains: file exists, use --force to overwrite"
+      - "no files are modified"
+
+  - scenario: "dx init --json emits a structured summary"
+    given:
+      - "a clean repo"
+    when:
+      - "user runs `dx init --json`"
+    then:
+      - "stdout is a single JSON object"
+      - "the object has key `created` listing the 3 paths created"
+      - "the object has key `skipped` listing nothing in clean state"
+
+out_of_scope:
+  - "Generating workflows (GP-007 and GP-009a own that)"
+  - "Detecting stack beyond the precedence rule documented in the gherkin (cdk.json + src/<lang>/ → <lang>+lambda; pyproject.toml → python+wheel; package.json → node+wheel; ambiguity → fail-loud requesting --stack/--service-shape flags)"
+  - "Configuring git remotes or CODEOWNERS (GP-009c)"
+  - "Migrating an existing .dx.yaml v0 to v1 (no v0 exists)"
+
+validation_commands:
+  # Validate against a fresh empty repo. After `uv tool install --editable packages/cli`, the binary is named `dx` and is on PATH — do NOT use `uv run dx` here (uv looks for a project venv at cwd; /tmp/gp003-test has none and would fail).
+  - "uv tool install --editable packages/cli  # ensure dx is installed before this validation block"
+  - "rm -rf /tmp/gp003-test && mkdir /tmp/gp003-test && (cd /tmp/gp003-test && git init -b main && touch pyproject.toml && dx init --json | jq -e '.created | length == 3')"
+  - "test -f /tmp/gp003-test/.dx.yaml"
+  - "test -x /tmp/gp003-test/.git/hooks/pre-push"
+  - "grep -qE 'dx check work_id' /tmp/gp003-test/.git/hooks/pre-push  # work_id check in hook"
+  - "grep -qE 'dx check lint' /tmp/gp003-test/.git/hooks/pre-push  # PDF p.4 §3.b — lint in hook"
+  # _yaml_validate IS imported as a module from the installed dx package; uv run --with packages/cli avoids needing a venv at cwd
+  # Validate generated .dx.yaml against schema using the dx CLI (already on PATH after uv tool install). The previous version hardcoded a /Users/drapala/Downloads/... path that only resolved on one machine — replaced with `git rev-parse --show-toplevel` for portability.
+  - |
+    REPO_ROOT="$(git rev-parse --show-toplevel)"
+    test -d "$REPO_ROOT/packages/shared-schemas" || { echo "ERROR: $REPO_ROOT/packages/shared-schemas not found — run from inside the fork after GP-001 has landed" >&2; exit 1; }
+    python -m dx._yaml_validate /tmp/gp003-test/.dx.yaml "$REPO_ROOT/packages/shared-schemas/dx-config.schema.json" \
+      || { echo "ERROR: generated .dx.yaml fails schema validation" >&2; exit 1; }
+  - "uv run pytest packages/cli/tests/test_init.py -v  # this one IS in the project, uv run is appropriate"
+  # �� stack detection precedence: cdk.json + src/python/ wins over package.json (Lambda-on-CDK pattern; Transactionify has all three)
+  - |
+    rm -rf /tmp/gp003-cdk
+    mkdir -p /tmp/gp003-cdk/src/python/myservice
+    ( cd /tmp/gp003-cdk \
+        && git init -b main >/dev/null \
+        && touch cdk.json package.json \
+        && touch src/python/myservice/__init__.py \
+        && dx init --defaults --json > /tmp/gp003-cdk-init.json \
+        && jq -e '.created | length == 3' /tmp/gp003-cdk-init.json >/dev/null )
+    # Detection MUST yield stack=python, service_shape=lambda even with package.json present
+    grep -qE '^stack:\s*python\b' /tmp/gp003-cdk/.dx.yaml || { echo "FAIL: stack should be python (cdk.json + src/python/ wins over package.json); got: $(grep '^stack:' /tmp/gp003-cdk/.dx.yaml)" >&2; exit 1; }
+    grep -qE '^service_shape:\s*lambda\b' /tmp/gp003-cdk/.dx.yaml || { echo "FAIL: service_shape should be lambda; got: $(grep '^service_shape:' /tmp/gp003-cdk/.dx.yaml)" >&2; exit 1; }
+  # �� ambiguity case: pyproject.toml + package.json + NO cdk.json → must fail-loud with actionable error
+  - |
+    rm -rf /tmp/gp003-ambig
+    mkdir -p /tmp/gp003-ambig
+    ( cd /tmp/gp003-ambig \
+        && git init -b main >/dev/null \
+        && touch pyproject.toml package.json )
+    ( cd /tmp/gp003-ambig && dx init --defaults --json 2> /tmp/gp003-ambig-stderr.txt; echo "exit=$?" ) | tee /tmp/gp003-ambig-out.txt
+    grep -qE '^exit=[1-9]' /tmp/gp003-ambig-out.txt || { echo "FAIL: ambiguous stack detection must exit non-zero; got exit=0" >&2; exit 1; }
+    grep -qiE 'stack|--stack|--service-shape' /tmp/gp003-ambig-stderr.txt || { echo "FAIL: error message must mention --stack or --service-shape flags" >&2; exit 1; }
+
+demo_signal: "dx init in a fresh repo → 3 files appear, all conventional, no manual configuration. Developer's first 30 seconds with the platform."
+
+notes: |
+  Templates use Jinja2. Stack detection is intentionally simple — heuristic over file
+  presence. Overengineering this is the trap (auto-detect language servers, frameworks,
+  etc.). Keep it dumb.
+
+  YAML validation: the python -m jsonschema CLI does NOT parse YAML — it expects JSON.
+  This ticket includes a small _yaml_validate.py module that loads YAML and validates
+  against a JSON schema. Reused by GP-004's contract check.

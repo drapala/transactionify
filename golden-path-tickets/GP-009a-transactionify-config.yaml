@@ -1,0 +1,221 @@
+id: GP-009a
+title: "Transactionify integration — .dx.yaml + generated workflows committed"
+tier: A
+delegate: hybrid
+delegate_reason: "Integration is where end-to-end bugs surface. Author reviews the generated YAML before merge."
+review_mode: pre_pr_review
+blast_radius: high
+stretch: false
+
+depends_on:
+  - GP-003
+  - GP-005
+  - GP-006
+  - GP-007
+
+paths:
+  primary: .dx.yaml
+  secondary:
+    - .github/workflows/pr.yml
+    - .github/workflows/integration.yml
+    - .github/pull_request_template.md
+    - scripts/regenerate-workflows.ts
+    - package.json
+    - test/unit/src/python/tools/validators/test_uuid_properties.py  # NEW: at least one Hypothesis test so PBT stage is not a no-op (F6)
+    - test/unit/src/python/requirements.txt  # MODIFY: add `hypothesis` so the PBT job can actually import it (the fork's existing test reqs do not include it)
+    - pyproject.toml  # MODIFY: ruff config + source-map-support dep + project metadata
+    - package.json  # MODIFY: add source-map-support to dependencies — bin/transactionify.ts imports it; under pnpm strict isolation transitive deps of devDependencies are not visible, so cdk synth fails with "Cannot find module"
+    # Fork-test fixes — without these the new pipeline runs pytest against a fork that fails in 4 independent ways (broken patch targets, wrong pythonpath, missing __init__.py, boto3 NoRegionError at module import)
+    - test/unit/src/python/services/test_transaction.py  # MODIFY: rename @patch targets from query_by_pk → query_by_pk_paginated; update return-value shape to dict {'items': [...], 'last_evaluated_key': None or omitted}
+    - test/unit/src/python/pytest.ini  # MODIFY: pythonpath needs BOTH repo root AND src/python on sys.path (existing tests import `from src.python.transactionify...` which requires repo root; production modules use `from transactionify...` which requires src/python). Set: `pythonpath = ../../../../ ../../../../src/python` (space-separated). Also register `pbt` marker so --strict-markers does not warn.
+    - test/unit/src/python/handlers/api/rest/account/create/__init__.py  # NEW (empty) — fixes "import file mismatch" on test_main collisions
+    - test/unit/src/python/handlers/api/rest/balance/get/__init__.py     # NEW (empty)
+    - test/unit/src/python/handlers/api/rest/payment/create/__init__.py  # NEW (empty)
+    - test/unit/src/python/handlers/api/rest/transaction/list/__init__.py  # NEW (empty)
+  test:
+    - tests/integration/test_workflows_present.py
+    - test/unit/src/python/tools/validators/test_uuid_properties.py
+
+gherkin:
+  - scenario: "dx init runs cleanly against the fork"
+    given:
+      - "the transactionify fork checked out at HEAD of main"
+      - "GP-002 + GP-003 published / installed via uv tool install (workspace link)"
+    when:
+      - "uv run dx init --json is run at fork root"
+    then:
+      - ".dx.yaml is created with project: transactionify, stack: python, service_shape: lambda (the fork is a Lambda service, not a wheel-distributable package; this drives PythonAdapter.packageCommand() in GP-006 to produce a CDK-synth tarball as the build artifact rather than running `uv build` against a non-existent pyproject.toml in src/python/)"
+      - ".github/pull_request_template.md is created"
+      - "stdout JSON.created has 3 entries"
+
+  - scenario: "Workflows are generated and committed"
+    given:
+      - "GP-007's generator is available via pnpm workspace"
+    when:
+      - "scripts/regenerate-workflows.ts (a thin invocation script) runs"
+    then:
+      - ".github/workflows/pr.yml is written and committed"
+      - ".github/workflows/integration.yml is written and committed"
+      - "regenerating produces no diff (idempotent)"
+
+  - scenario: "Generated workflows include the load-bearing markers"
+    given:
+      - "the committed .github/workflows/pr.yml and integration.yml"
+    when:
+      - "the files are inspected"
+    then:
+      - "pr.yml contains 'continue-on-error: true' adjacent to the AI review step"
+      - "pr.yml contains a step uploading dora-event.jsonl as artifact"
+      - "integration.yml contains 'actions/attest-build-provenance@v1'"
+      - "actionlint (if installed) passes both files"
+
+  - scenario: "PBT stage has at least one REAL Hypothesis test — validation is semantic (uses hypothesis), not just a marker"
+    given:
+      - "GP-007's workflow includes a pbt stage that runs `pytest -m pbt`"
+      - "the fork currently has zero @pytest.mark.pbt tests; pytest with -m pbt would exit 5 (no tests collected)"
+    when:
+      - "this ticket adds test/unit/src/python/tools/validators/test_uuid_properties.py with at least one @pytest.mark.pbt test that actually uses hypothesis"
+      - "the property is a ROUND-TRIP invariant: `is_valid_uuidv7(generate_uuidv7())` is True. (Monotonicity is NOT chosen as the property because src/python/transactionify/tools/generators/uuid.py:25-37 falls back to uuid4 when uuid_utils is not in requirements — and uuid_utils is not in requirements — so a monotonicity test would reliably fail. The round-trip property tests the generator/validator contract directly and is robust against the fallback path.)"
+    then:
+      - "the test file imports `hypothesis` (`from hypothesis import given, strategies as st` or equivalent) and uses `@given(...)` on at least one test function — a marker without `@given` is a no-op and fails this scenario"
+      - "the test asserts the round-trip property (generated UUID validates as UUIDv7), NOT monotonicity"
+      - "the test name or docstring mentions UUID/uuid (the property is on the UUID validator; not on an unrelated invariant)"
+      - "running `pytest -m pbt` exits 0 (not 5) AND the executed test invokes hypothesis (verifiable via `pytest -m pbt -v` showing 'hypothesis settings' in output, or by `hypothesis statistics` artifact when --hypothesis-show-statistics is passed)"
+      - "the pbt stage in CI has at least one passing PBT test, proving the discipline is real, not theatrical, AND the property does not falsify against the fork's actual code path"
+      - "the Hypothesis test is short (< 30 lines including imports); does NOT trigger scope creep into property-testing the entire codebase"
+
+  - scenario: "Fork's existing pytest suite runs green"
+    given:
+      - "the fork's existing test/unit/src/python/services/test_transaction.py decorates 4 tests with @patch('src.python.transactionify.services.transaction.query_by_pk') — but services/transaction.py imports query_by_pk_paginated, not query_by_pk; mock.patch fails with AttributeError because the name does not exist in the services.transaction module namespace (the previous audit's claim that 'the symbol still exists in tools/aws/dynamodb' was technically true but missed the namespace point — different module)"
+      - "the fork's pytest.ini has pythonpath = ../../../../ (= repo root); existing test imports use `from src.python.transactionify...` (resolves only with repo root on path) BUT services modules' inner imports use `from transactionify.tools.aws.dynamodb import …` (resolves only with src/python on path). Both paths are required simultaneously; replacing repo root with src/python only would break all existing test imports."
+      - "src/python/transactionify/tools/aws/dynamodb/__init__.py:9 calls `dynamodb = boto3.resource('dynamodb')` at module import; without AWS_DEFAULT_REGION in env, raises NoRegionError on first import"
+      - "handlers/api/rest/{account/create,balance/get,payment/create,transaction/list}/test_main.py — four files named test_main.py without per-directory __init__.py — produce 'import file mismatch' on collection"
+    when:
+      - "this ticket lands all four fixes: rename @patch targets to query_by_pk_paginated AND update mock return values to {'items': [...]} dict shape (the paginated API returns dict, not list); set pythonpath to BOTH `../../../../` and `../../../../src/python` (space-separated — pytest accepts multiple) so both import patterns resolve; add empty __init__.py to each of the four handler test directories; set AWS_DEFAULT_REGION: us-east-1 as env var on the unit-tests / pbt / contract steps in GP-007's generated workflow"
+    then:
+      - "running `AWS_DEFAULT_REGION=us-east-1 cd test/unit/src/python && pytest -m 'not pbt' -v` exits 0 against the patched fork (no AttributeError, no import file mismatch, no NoRegionError, no ModuleNotFoundError)"
+      - "the green CI moment Act 2 of the demo promises is structurally possible — without these fixes, every blocking job is red and the green-CI beat is theatre"
+      - "production code in src/python/ is NOT modified by this ticket (the boto3 module-level singleton stays; the env var sets the region externally — the lazy-init refactor is ADR Future Integrations evolution path)"
+
+  - scenario: "hypothesis is added to the fork's test requirements so the PBT job can run"
+    given:
+      - "the fork's existing /Users/drapala/projects/transactionify/test/unit/src/python/requirements.txt contains pytest, pytest-cov, pytest-mock, moto, black, flake8, mypy, boto3-stubs, boto3 — no hypothesis"
+      - "the PBT stage in the generated workflow runs `pytest -m pbt` against tests under test/unit/src/python/"
+    when:
+      - "this ticket appends `hypothesis` (with a >= constraint, e.g. `hypothesis>=6.100`) to test/unit/src/python/requirements.txt"
+    then:
+      - "the file contains a line matching `^hypothesis(>=|==)`"
+      - "running `pip install -r test/unit/src/python/requirements.txt` succeeds and `python -c 'import hypothesis'` returns 0"
+      - "without this scenario, pytest -m pbt under the new pipeline aborts at import with ModuleNotFoundError before collection — the validation grep on tests-collected falls through to a passing exit code that masks the import failure (the agent or pipeline would paper over it). Schema-level requirement: PBT job must be able to actually run, not just look like it would"
+
+  - scenario: "ruff config baselines the fork so dx check lint does not erupt on its first run"
+    given:
+      - "the fork has no pyproject.toml at root today; the ruff invocation from PythonAdapter is `ruff check .` (GP-006 PythonAdapter)"
+      - "running ruff with default settings against /Users/drapala/projects/transactionify/src/python/ may flag long-line, missing-docstring, or import-order issues in the existing source — issues unrelated to the platform PoC"
+    when:
+      - "this ticket adds a minimal pyproject.toml at the fork root with a [tool.ruff] section that excludes the existing fork source from rules unrelated to the platform's intent (or selects a small allowlist of rules: E, F, I; ignores D, ANN, etc.) AND a # TODO comment in the ADR Future Integrations bullet noting that the fork's existing source has not been ruff-baselined"
+    then:
+      - "running `ruff check .` at fork root exits 0 against the unmodified upstream source"
+      - "the [tool.ruff] config lives in pyproject.toml, NOT in a separate .ruff.toml (single source of truth)"
+      - "Act 2 of the live demo can show a green CI run on the unchanged fork source; lint failures the candidate intentionally introduces during the failure-loop scenario still fail (the baseline does not disable rules entirely)"
+      - "if a ticket assumes the fork's existing source is lint-clean without this baseline, the demo's green-CI climax fails on a Ruy-Garcia commit the candidate did not write"
+
+  - scenario: "Pushing a branch triggers the PR workflow on real GitHub"
+    given:
+      - "a branch pushed to the fork's origin"
+    when:
+      - "a PR is opened against main"
+    then:
+      - "the PR pipeline runs (gh run list shows it)"
+      - "all blocking stages (lint, unit-tests, pbt, contract, work-id-pr-title, cdk-synth, sandbox-verify) execute. The sandbox step is named `sandbox-verify` because at PoC fidelity it is synth-only, not a real cdk deploy."
+      - "ai-review step runs but does not block on failure"
+
+out_of_scope:
+  # Fork-test fixes ARE in scope (see scenario "Fork's existing pytest suite runs green") — the unmodified fork's pytest suite fails on 4 independent issues (stale @patch targets after upstream's pagination refactor in a0d9b5e, wrong pythonpath in pytest.ini, missing __init__.py in handler test dirs, boto3 NoRegionError at module-import). Only NEW behavioral test coverage remains out of scope.
+  - "Adding NEW behavioral test coverage to services/transaction.py beyond updating the existing patch targets and mock shapes to match the current API (the existing 6 tests stay; new tests for new code paths are evolution path)"
+  - "Adding more than ONE Hypothesis test (F6 mitigation is bounded — one meaningful property test, not a sweep through the codebase)"
+  - "Applying branch protection / rulesets (GP-009c)"
+  - "Replacing the existing CDK app with custom constructs"
+  - "Modifying transactionify's production source code beyond config + lint baseline (the boto3 module-level singleton stays; AWS_DEFAULT_REGION is set in CI env, not via production code change)"
+  - "Migrating the fork's source to ruff-strict — the baseline is permissive on purpose; tightening is evolution path"
+
+validation_commands:
+  - "test -f .dx.yaml && test -f .github/workflows/pr.yml && test -f .github/workflows/integration.yml"
+  - "uv run python -m dx._yaml_validate .dx.yaml packages/shared-schemas/dx-config.schema.json"
+  # F13 — scoped: only ai-review may have continue-on-error: true; blocking jobs must not
+  - "if command -v yq; then test \"$(yq '.jobs.\"ai-review\".\"continue-on-error\"' .github/workflows/pr.yml)\" = 'true'; else awk '/^  ai-review:/,/^  [a-zA-Z]/' .github/workflows/pr.yml | grep -q 'continue-on-error: true'; fi  # scoped to ai-review block"
+  - "grep -q 'attest-build-provenance' .github/workflows/integration.yml"
+  - "git diff --exit-code .github/workflows/  # idempotent regeneration"
+  - "test -f test/unit/src/python/tools/validators/test_uuid_properties.py  # F6 — Hypothesis test exists"
+  - "grep -qE '^hypothesis(>=|==)' test/unit/src/python/requirements.txt  # P0-4 — hypothesis is in the fork's test reqs"
+  - "uv run pip install -r test/unit/src/python/requirements.txt && uv run python -c 'import hypothesis'  # smoke import succeeds"
+  # P0-1 fork-test fixes — full suite must run green
+  - "test -f test/unit/src/python/handlers/api/rest/account/create/__init__.py && test -f test/unit/src/python/handlers/api/rest/balance/get/__init__.py && test -f test/unit/src/python/handlers/api/rest/payment/create/__init__.py && test -f test/unit/src/python/handlers/api/rest/transaction/list/__init__.py  # 4 __init__.py files prevent test_main.py collection collisions"
+  - "grep -qE 'pythonpath\\s*=.*\\.\\./\\.\\./\\.\\./\\.\\./.*\\.\\./\\.\\./\\.\\./\\.\\./src/python' test/unit/src/python/pytest.ini  # pythonpath has BOTH repo root AND src/python (space-separated); test imports use `from src.python...` (needs repo root); production inner imports use `from transactionify...` (needs src/python). Setting only one breaks the other."
+  - "! grep -qE 'query_by_pk[^_]' test/unit/src/python/services/test_transaction.py  # no patches of bare query_by_pk (which does not exist in the services.transaction namespace); only query_by_pk_paginated"
+  - "grep -qE 'query_by_pk_paginated' test/unit/src/python/services/test_transaction.py  # the rewritten patches reference the real symbol"
+  - "(cd test/unit/src/python && AWS_DEFAULT_REGION=us-east-1 pytest -m 'not pbt' -v)  # full suite green minus PBT (which runs in its own stage); no AttributeError, no import file mismatch, no NoRegionError. Note: env-var prefix attaches to the FOLLOWING command — `AWS_DEFAULT_REGION=us-east-1 cd …` would set the var only for cd (which doesn't propagate); the var must prefix `pytest`."
+  - "cd test/unit/src/python && pytest -m pbt --collect-only -q | grep -qE '[1-9][0-9]* tests collected'  # PBT stage finds at least one test"
+  - "cd test/unit/src/python && pytest -m pbt -v 2>&1 | grep -qE 'hypothesis|@given'  # confirms hypothesis actually ran"
+  # �� pbt marker registered in pytest.ini (--strict-markers rejects unknown)
+  - "grep -qE '^\\s+pbt:' test/unit/src/python/pytest.ini  # pbt marker registered alongside unit and integration"
+  # �� source-map-support in package.json so pnpm cdk synth works under strict isolation
+  - "grep -q '\"source-map-support\"' package.json  # bin/transactionify.ts imports source-map-support/register; pnpm strict isolation requires explicit dep"
+  # �� ruff baseline (with positive checks per P1-4)
+  - "test -f pyproject.toml && grep -qE '\\[tool\\.ruff\\]' pyproject.toml  # ruff config lives in pyproject.toml at fork root"
+  - "grep -qE '(^select|lint\\.select).*\"E\"' pyproject.toml  # P1-4 — pycodestyle Errors at minimum (positive validation, not just 'exits 0')"
+  - "grep -qE '(^select|lint\\.select).*\"F\"' pyproject.toml  # P1-4 — pyflakes at minimum"
+  - "ruff check . --no-cache  # exits 0 against the unmodified fork source"
+  # P1-4 ruff canary — config must catch a deliberate violation (proves it's not 'ignore everything')
+  - "echo 'import os' > /tmp/ruff-canary.py && echo 'import os' >> /tmp/ruff-canary.py && (cd $(dirname $(realpath pyproject.toml)) && ruff check /tmp/ruff-canary.py 2>&1 | grep -qE 'F811|redefin') || { echo 'ERROR: ruff config does not catch F811 duplicate import — config is too permissive'; exit 1; }"
+
+demo_signal: "Open the fork in browser → /actions tab shows the generated PR workflow running on a real PR. Real integration, not slide deck."
+
+notes: |
+  Why the test-fixes scope expanded (P0-1 audit retraction):
+    The original ticket put "fixing failing tests" out of scope on the
+    rationale that GP-012 had been archived for proposing test discipline
+    that turned out to be unsupported (the symbol `query_by_pk` was claimed
+    to "no longer exist" but it does — in tools/aws/dynamodb/__init__.py).
+    That archive reasoning was technically correct on the symbol's existence
+    but missed the namespace point: test_transaction.py patches
+    `services.transaction.query_by_pk`, which is a name in the
+    `services.transaction` module's namespace. After upstream commit
+    a0d9b5e ("Added pagination for transactions"), services/transaction.py
+    imports `query_by_pk_paginated` instead — so `query_by_pk` is NOT in
+    that module's namespace, and `mock.patch` raises AttributeError when
+    it tries to swap it. Combined with the wrong pytest.ini pythonpath,
+    the missing handler __init__.py files, and the boto3 NoRegionError
+    at module-import, the fork's pytest suite cannot run green at all.
+    This ticket now owns the fork-test fixes that close P0-1.
+
+  This ticket OWNS:
+    - the platform wiring (`.dx.yaml`, generated workflows, regenerate script)
+    - the fork-test fixes that make the unit-tests / pbt / contract CI stages
+      runnable (rename @patch targets to query_by_pk_paginated; update mock
+      return values to dict shape; add __init__.py to four handler test dirs;
+      fix pythonpath in pytest.ini; register pbt marker; AWS_DEFAULT_REGION
+      env in the generated workflow)
+    - the PBT stage being executable AND non-falsifying (hypothesis added to
+      test reqs; one real Hypothesis test using the round-trip property
+      `is_valid_uuidv7(generate_uuidv7())` — NOT monotonicity, which fails
+      against the uuid4 fallback path the fork actually uses)
+    - the lint stage being green on the unmodified fork source (ruff baseline
+      in pyproject.toml; positive validations on E + F selection, plus a
+      canary that proves the config catches F811)
+    - source-map-support added to package.json so pnpm cdk synth works under
+      pnpm strict isolation (P1-3 — bin/transactionify.ts imports it; npm
+      hoisted it transitively from aws-cdk, pnpm does not)
+
+  Order of operations during dispatch:
+    1. GP-007's generator produces valid workflow YAML
+    2. THIS ticket creates pyproject.toml at fork root (with [tool.ruff])
+       BEFORE running `dx init` — because GP-003's stack detection (post P0-6
+       fix) prefers cdk.json + src/python/ → stack: python, but the lint
+       baseline must exist before any check runs
+    3. `dx init` is run; .dx.yaml gets stack: python, service_shape: lambda
+    4. workflows are regenerated and committed
+    5. fork-test fixes are committed (test_transaction.py, __init__.py files,
+       pytest.ini)
+    6. GP-009c applies the ruleset (it derives required_status_checks from
+       the workflow this ticket committed in step 4)

@@ -1,0 +1,178 @@
+id: GP-001
+title: "Shared schemas — DORA event v1 + .dx.yaml"
+tier: A
+delegate: pipeline
+delegate_reason: "Pure schema work; AC reduces to 'does this JSON validate'."
+review_mode: pre_pr_review
+blast_radius: high
+stretch: false
+
+depends_on:
+  - GP-000
+
+paths:
+  primary: packages/shared-schemas/dora-event.schema.json
+  secondary:
+    - packages/shared-schemas/dx-config.schema.json
+    - packages/shared-schemas/package.json
+    - packages/shared-schemas/README.md
+  test:
+    - packages/shared-schemas/tests/test_schemas.py
+
+gherkin:
+  - scenario: "DORA event schema models raw facts (not aggregated metrics)"
+    given:
+      - "dora-event.schema.json exists in packages/shared-schemas/"
+      - "schema requires: event_id, schema_version, event_type, service, repository, commit_sha, actor, outcome, started_at, finished_at"
+      - "event_id is a UUIDv7 (or any monotonically-orderable unique string) generated at emission time — the stable identity that downstream consumers (MTTR aggregator) reference; without it, recovered_from_failure_id has nothing reliable to point at"
+      - "schema's event_type enum is: pipeline_run | deployment (incident_* event types are NOT in v1 — MTTR is derived from deployment events with is_rework: true correlated to a prior failed deployment via recovered_from_failure_id resolving to an event_id; this is simpler than incident lifecycle and avoids introducing an incident-correlation key the PoC does not need)"
+    when:
+      - "a sample pipeline_run event with all required fields and outcome: success is validated"
+    then:
+      - "validation passes"
+      - "additionalProperties is false at the top level (drift prevention)"
+      - "event_id format validation: matches the UUIDv7 regex `^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$` (same regex as the service's UUID validator — reuses existing infrastructure rather than introducing a new identity scheme)"
+
+  - scenario: "Schema captures who / what / when / why for SOC2-style audit trail — required, not optional"
+    given:
+      - "PDF requires unified audit trail across the platform"
+    when:
+      - "a deployment event is emitted"
+    then:
+      - "schema's required list includes ALL of: event_id, schema_version, event_type, service, repository, commit_sha, actor, work_id, change_summary, outcome, started_at, finished_at — the SOC2 'why' is enforced, not a soft norm; event_id is the stable identity the MTTR aggregator joins on"
+      - "for events with source: ci (i.e. emitted from a workflow run), the schema additionally requires run_id and source_url (conditional via if/then in JSON Schema)"
+      - "for events with event_type: deployment, the schema additionally requires commit_authored_at (ISO8601 UTC) — the time the commit was authored, used downstream to compute Lead Time for Changes (deployment.finished_at - commit_authored_at). This is a known field at the schema level (not a free-form property), so additionalProperties: false does NOT reject it"
+      - "actor (github username or service account) — answers WHO"
+      - "event_type + service + commit_sha + change_summary — answer WHAT"
+      - "started_at + finished_at (ISO8601, UTC) — answer WHEN"
+      - "work_id + change_summary + (optional) reason — answer WHY (link to ticket and business reason)"
+      - "run_id + source_url (CI events) — link the audit row to the workflow run that produced it"
+      - "commit_authored_at (deployment events) — enables Lead Time for Changes downstream"
+      - "schema rejects an event missing any of: actor, work_id, change_summary, repository (audit trail's load-bearing fields are NOT optional)"
+      - "schema rejects a CI-source event missing run_id or source_url (per the conditional)"
+      - "schema rejects a deployment event missing commit_authored_at (per the conditional)"
+
+  - scenario: "Deployment events model rework as a boolean fact, not a rate; MTTR derives from rework correlation"
+    given:
+      - "schema defines is_rework (boolean) and recovered_from_failure_id (string, optional) on deployment events"
+    when:
+      - "a deployment event with is_rework: true and recovered_from_failure_id: 'fail-123' is validated"
+    then:
+      - "validation passes"
+      - "rework rate is explicitly NOT a property of a single event — it is computed downstream by counting events where is_rework is true"
+      - "MTTR (Mean Time To Restore — the PDF's 'Time to Fix') is derived downstream as: for each deployment event with is_rework: true and a non-null recovered_from_failure_id, find the prior deployment event whose event_id matches recovered_from_failure_id (event_id is the schema-required stable identity, not a fallback to commit_sha+started_at heuristics); MTTR sample = recovery.finished_at - failure.started_at; aggregate is the mean across the window. No incident_* event types are needed in v1 — the deployment+rework pair joined by event_id is the correlation"
+      - "schema rejects a deployment event with is_rework: true AND recovered_from_failure_id format invalid (must match the event_id UUIDv7 pattern); a rework deployment whose referenced failure id does not match any event_id in the loaded window does NOT fail schema validation (resolution is consumer logic — the aggregator ignores unresolvable rework pairs and counts only resolved ones in MTTR), but the format itself must be a valid UUIDv7"
+
+  - scenario: "Schema rejects events missing required raw-fact fields"
+    given:
+      - "the schema's required list"
+    when:
+      - "an event missing finished_at or commit_sha is validated"
+    then:
+      - "validation fails with a message naming the missing field"
+
+  - scenario: "Schema rejects unknown event_type values"
+    given:
+      - "schema's event_type enum"
+    when:
+      - "an event with event_type: 'feature_flag_flip' is validated"
+    then:
+      - "validation fails with a clear enum-mismatch message"
+      - "the same applies to event_type: 'incident_opened' or 'incident_closed' — these are NOT in the v1 enum (intentionally; MTTR is derived from deployment+rework correlation)"
+
+  - scenario: ".dx.yaml schema validates a minimal config"
+    given:
+      - "dx-config.schema.json defines required fields: project, stack, service_shape"
+    when:
+      - "a minimal .dx.yaml with project: transactionify, stack: python, service_shape: lambda is validated"
+    then:
+      - "validation passes"
+      - "optional fields (custom_steps, work_id_pattern, agents) accept absence"
+      - "service_shape enum is exactly: 'lambda' | 'wheel' | 'binary' (binary reserved for Go/Clojure adapters; wheel for distributable Python; lambda for AWS Lambda services). Unknown values fail validation with a clear enum-mismatch message"
+      - "service_shape is REQUIRED (not optional) — without it, PythonAdapter.packageCommand() cannot pick a packaging strategy; the schema forces the project to declare intent rather than the adapter guessing at runtime"
+      - "test_root (string, optional) declares where pytest.ini lives (and consequently the cwd PythonAdapter passes to pytest invocations). Default by service_shape: 'lambda' → 'test/unit/src/python'; 'wheel' → 'tests'. Required ONLY when the project's test layout deviates from the per-shape default (P1-13 — without test_root, dx check from fork root invokes pytest with no rootdir and auto-discovery recurses into node_modules/cdk.out)"
+
+  - scenario: ".dx.yaml allows custom_steps escape hatch"
+    given:
+      - "a .dx.yaml with stack: python and custom_steps: [{name: e2e, run: pytest tests/e2e}]"
+    when:
+      - "validated against dx-config.schema.json"
+    then:
+      - "validation passes"
+      - "custom_steps[].name and custom_steps[].run are required when present"
+
+out_of_scope:
+  - "Schema versioning beyond v1 (no migration plumbing)"
+  - "TypeScript type generation (GP-005 handles that downstream)"
+  - "Aggregation logic that derives the 4 core DORA metrics + optional rework signal from raw events — explicitly out of PoC scope; aggregator (jq, Athena, Looker, or future `dx dora aggregate`) is consumer-side"
+  - "Validating against actual GitHub Actions output formats"
+
+validation_commands:
+  - "uv run python -m jsonschema -i packages/shared-schemas/tests/fixtures/valid-pipeline-run-event.json packages/shared-schemas/dora-event.schema.json"
+  - "uv run python -m jsonschema -i packages/shared-schemas/tests/fixtures/valid-deployment-rework-event.json packages/shared-schemas/dora-event.schema.json"
+  # Negative validations via pytest (NOT shell `&& exit 1 || exit 0` — that pattern passes if jsonschema crashes or is missing, masking a tool-availability bug as a passing test). pytest assertions distinguish "schema correctly rejected" from "tool failed".
+  - "uv run pytest packages/shared-schemas/tests/test_schemas.py -v"
+  - "uv run pytest packages/shared-schemas/tests/test_schemas.py::test_invalid_missing_finished_at -v  # the test asserts validation.errors mentions 'finished_at', not just non-zero exit"
+  - "uv run pytest packages/shared-schemas/tests/test_schemas.py::test_invalid_unknown_event_type -v"
+  - "uv run pytest packages/shared-schemas/tests/test_schemas.py::test_invalid_missing_event_id -v"
+  - "uv run pytest packages/shared-schemas/tests/test_schemas.py::test_invalid_event_id_not_uuidv7 -v"
+  # event_id present in valid fixtures
+  - "jq -e '.event_id | test(\"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\")' packages/shared-schemas/tests/fixtures/valid-pipeline-run-event.json"
+  - "jq -e '.event_id and (.recovered_from_failure_id | test(\"^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$\"))' packages/shared-schemas/tests/fixtures/valid-deployment-rework-event.json"
+
+demo_signal: "Schema shows raw-event design: event_type + outcome + is_rework. CTO sees we model facts, not metrics. The 4 core DORA metrics + optional rework signal derive from these events — separation of concerns is visible."
+
+notes: |
+  Critical design decision: events are RAW FACTS, not aggregated metrics.
+
+  Aggregated metrics like deployment_frequency_per_week or change_fail_rate are NOT
+  fields on individual events — they are derived by counting/ratio over time windows.
+  Putting them on events would be a category error that any data-savvy reviewer
+  would catch immediately.
+
+  Mapping from raw events (downstream aggregation, out of scope here):
+
+  4 core DORA metrics (canonical, what the PDF references):
+    - Change lead time         = finished_at(deployment) - commit_authored_at(deployment)
+                                 (commit_authored_at is REQUIRED on deployment events at schema level)
+    - Deployment frequency     = count(event_type=deployment, outcome=success) over window
+    - MTTR (Time to Fix)       = mean(finished_at(rework_deploy) - started_at(referenced_failure_deploy))
+                                 over deployment events where is_rework=true and recovered_from_failure_id
+                                 resolves to a prior failed deployment in the window
+    - Change fail rate         = count(deployment, outcome=failure) / count(deployment)
+
+  Optional supplementary signal (NOT canonical DORA — internal platform signal,
+  derived from the same raw events; useful for catching "throughput as instability"
+  per DORA 2025 framing):
+    - Deployment rework rate   = count(deployment, is_rework=true) / count(deployment)
+
+  This split is defensive: a CTO who knows DORA core = 4 will not be able to
+  challenge the schema as inventing a fifth metric. Rework is a signal, not a
+  DORA metric.
+
+  Schema strictness: additionalProperties: false at the top level prevents agents/teams
+  from quietly adding unstandardized fields. Extending the schema requires v2.
+
+  Audit-trail field set (PDF SOC2 requirement — answers who/what/when/why):
+    - WHO:    actor (REQUIRED)
+    - WHAT:   event_type + service + commit_sha + change_summary (ALL REQUIRED)
+    - WHEN:   started_at + finished_at (REQUIRED, ISO8601 UTC)
+    - WHY:    work_id (REQUIRED, links change to ticket) + change_summary (REQUIRED) + reason (OPTIONAL)
+    - WHERE:  repository (REQUIRED, owner/repo), run_id + source_url (REQUIRED for source: ci)
+  These fields are the same on every event_type (pipeline_run / deployment),
+  so a single audit query against the JSONL stream returns a unified ledger across the
+  platform. That is the SOC2-shaped artifact the PDF asks for.
+
+  Why no incident_* event types in v1: the PDF asks for MTTR ("Time to Fix"). The simpler
+  modeling is: a "fix" IS a successful deployment that recovers from a prior failed one.
+  is_rework + recovered_from_failure_id capture this directly. Adding incident_opened/
+  incident_closed would (a) introduce a new correlation key, (b) require teams to also
+  emit incidents from their on-call tooling — out of PoC scope, (c) duplicate signal that
+  is already in the deployment stream. v2 may add incidents if a team needs richer
+  incident lifecycle modeling.
+
+  Strict-required design rationale: a SOC2 audit trail with optional WHY/WHO fields is
+  not an audit trail — it is documentation. By making work_id, change_summary, and actor
+  hard-required at the schema level, the platform forces every emitter to fill them.
+  Local dev events that genuinely lack a CI run can omit run_id/source_url (gated by
+  source: ci conditional).

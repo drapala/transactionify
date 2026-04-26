@@ -1,0 +1,143 @@
+id: GP-004
+title: "dx check — local checks that predict CI (lint, unit, PBT, contract, work_id)"
+tier: A
+delegate: hybrid
+delegate_reason: "This codifies Design Principle 2 (Local checks must predict CI). The cross-import enforcement test is the load-bearing detail; author reviews it."
+review_mode: pre_pr_review
+blast_radius: high
+stretch: false
+
+depends_on:
+  - GP-001
+  - GP-002
+
+paths:
+  primary: packages/cli/src/dx/commands/check.py
+  secondary:
+    - packages/cli/src/dx/checks/__init__.py
+    - packages/cli/src/dx/checks/registry.py
+    - packages/cli/src/dx/checks/lint.py
+    - packages/cli/src/dx/checks/unit_tests.py
+    - packages/cli/src/dx/checks/pbt.py
+    - packages/cli/src/dx/checks/contract.py
+    - packages/cli/src/dx/checks/work_id.py
+    - packages/cli/src/dx/checks/manifest.py
+    - packages/cli/src/dx/checks/manifest_codegen.py   # NEW: emits JSON copy for the framework's static import (GP-007 cross-import enforcement)
+  test:
+    - packages/cli/tests/test_check.py
+    - packages/cli/tests/test_check_manifest.py
+    - packages/cli/tests/test_check_manifest_codegen.py
+    - packages/cli/tests/test_work_id_full_coverage.py
+
+gherkin:
+  - scenario: "dx check runs the registered checks for the stack — including PBT distinct from unit"
+    given:
+      - "a repo with .dx.yaml stack: python"
+      - "ruff, pytest, and hypothesis installed"
+    when:
+      - "user runs `dx check --json`"
+    then:
+      - "stdout JSON contains an array of check results, each with: name, status (pass|fail|skip), duration_ms"
+      - "checks include at minimum: lint, unit_tests, pbt (property-based via Hypothesis), contract (API contract via shared-schemas), work_id"
+      - "PBT is a separate check, not folded into unit_tests — PDF lists Unit Tests, PBT, and API Contract as three distinct stages"
+      - "for Python stack, pbt invokes pytest with a `pbt` mark or a Hypothesis-only file glob; documentation makes the convention explicit"
+      - "exit code is 0 only if all checks pass"
+
+  - scenario: "Failed check exits non-zero with actionable error"
+    given:
+      - "a repo with a failing pytest test"
+    when:
+      - "user runs `dx check`"
+    then:
+      - "exit code is non-zero"
+      - "human output shows which check failed and the failure detail"
+      - "with --json, payload.failures[0] has: check_name, error_message, suggested_fix"
+
+  - scenario: "CHECK_MANIFEST is exported as the contract consumed by the framework"
+    given:
+      - "packages/cli/src/dx/checks/manifest.py defines CHECK_MANIFEST: dict[str, dict]"
+    when:
+      - "the manifest is imported"
+    then:
+      - "each entry has shape: {name, cmd, args, exit_codes_passing}"
+      - "lint, unit_tests, pbt, contract, work_id are all present (5 keys minimum, matching PDF's three test types + lint + work_id)"
+      - "CHECK_MANIFEST['work_id'] additionally exposes: extract_pattern (e.g. '(LL|GP)-[0-9]+'), branch_pattern (dash-joined: '^(LL|GP)-[0-9]+-[a-z0-9-]+$'), subject_pattern (colon-prefixed: '^(LL|GP)-[0-9]+: .+$') — the three formats serve branches, commits, and PR titles respectively"
+      - "the manifest is the ONLY source of truth for check commands AND for the work_id pattern set; dx check, dx branch (GP-002b), dx pr (GP-002b), and GP-007's PR-title CI step all import these — no duplication"
+      - "GP-007's cross-import test enforces that the framework workflow generator reads commands AND patterns from CHECK_MANIFEST"
+
+  - scenario: "Work ID validation covers branch + commits locally; PR title in CI"
+    given:
+      - "a repo with .dx.yaml work_id_pattern: '^(LL|GP)-[0-9]+$'"
+      - "current branch named 'GP-123-feat-foo' with two commits: 'GP-123: add adapter' and 'GP-123: tests'"
+    when:
+      - "dx check work_id runs locally"
+    then:
+      - "branch name matches the pattern → branch sub-check passes; extracted work_id = GP-123"
+      - "every commit since merge-base origin/main has the work_id prefix in the subject → commits sub-check passes"
+      - "if any commit subject lacks the prefix → check fails listing the offending SHAs; suggested fix shown (`git rebase -i + reword`)"
+      - "in CI (PR pipeline, GP-007 owns the integration), a separate step pulls the PR title from the GitHub event payload and asserts the same pattern; mismatched PR title fails the PR check with an actionable message"
+
+  - scenario: "manifest_codegen emits the JSON copy the framework imports (cross-language single source of truth)"
+    given:
+      - "packages/cli/src/dx/checks/manifest.py defines CHECK_MANIFEST"
+      - "the framework expects packages/framework/src/generated/check-manifest.json"
+    when:
+      - "the user (or CI) runs `python -m dx.checks.manifest_codegen --out packages/framework/src/generated/check-manifest.json`"
+    then:
+      - "the script serializes CHECK_MANIFEST to JSON with sorted keys + 2-space indent (deterministic output for git diff)"
+      - "running it twice produces no diff (idempotent)"
+      - "the JSON shape matches the Python dict shape exactly: same keys, same nested fields, same regex strings (extract_pattern, branch_pattern, subject_pattern)"
+      - "if the Python source changes and the JSON is not regenerated, GP-007's CI check (git diff --exit-code on the generated file) fails — preventing silent drift between Python truth and TS consumer"
+      - "this is the codegen step that makes the cross-import enforcement test in GP-007 real, not theatrical"
+
+  - scenario: "Pre-push hook (installed by GP-003) chains dx check work_id AND dx check lint (PDF: 'mandatory tests/linting before push')"
+    given:
+      - "GP-003 installed the pre-push hook"
+    when:
+      - "the user runs git push"
+    then:
+      - "the hook invokes dx check work_id FIRST (covering branch + commits — fast, deterministic)"
+      - "the hook invokes dx check lint SECOND (PDF p.4 §3.b literal phrase 'mandatory tests/linting before code is pushed to the remote repository')"
+      - "non-matching branch / commit / lint failure blocks the push at the client side — fast feedback before CI"
+      - "the same dx check work_id and dx check lint run in CI as status checks, so bypassing the hook still fails on PR open"
+      - "unit tests are NOT in the hook (full test suite is CI's job; pre-push staying fast is the explicit trade-off; the ADR Decision section documents this scoping)"
+
+out_of_scope:
+  - "Caching check results across runs"
+  - "Parallel check execution (sequential is OK for PoC)"
+  - "Adding new check types via plugin (future)"
+  - "Coverage thresholds (let pytest decide via config)"
+
+validation_commands:
+  - "cd packages/cli/tests/fixtures/passing-repo && uv run dx check --json | jq -e '.failures | length == 0'"
+  - "cd packages/cli/tests/fixtures/failing-repo && uv run dx check --json; test $? -ne 0"
+  - "uv run pytest packages/cli/tests/test_check.py packages/cli/tests/test_check_manifest.py packages/cli/tests/test_work_id_full_coverage.py -v"
+  - "uv run python -c 'from dx.checks.manifest import CHECK_MANIFEST; assert set(CHECK_MANIFEST.keys()) >= {\"lint\", \"unit_tests\", \"pbt\", \"contract\", \"work_id\"}'"
+  # Codegen produces deterministic JSON consumed by the framework
+  - "uv run python -m dx.checks.manifest_codegen --out /tmp/check-manifest.json && jq -e '.work_id.branch_pattern' /tmp/check-manifest.json && jq -e '.work_id.subject_pattern' /tmp/check-manifest.json && jq -e '.lint.cmd' /tmp/check-manifest.json"
+  - "uv run python -m dx.checks.manifest_codegen --out /tmp/m1.json && uv run python -m dx.checks.manifest_codegen --out /tmp/m2.json && diff -q /tmp/m1.json /tmp/m2.json  # idempotent"
+
+demo_signal: "dx check exits 0 → CI exits 0; same code path. Live moment in Act 2: dev sees check pass, pushes confidently, CI green."
+
+notes: |
+  GP-004 OWNS the manifest (the contract). GP-007 OWNS the cross-import enforcement test
+  (asserting the framework reads from this manifest, not hardcoded strings). This split
+  matches dependency direction: the consumer of a contract is where divergence is detectable,
+  not the producer.
+
+  Implementation: CLI's checks expose CHECK_MANIFEST as a Python dict. The framework
+  consumes a JSON-serialized version (emitted by manifest_codegen.py) so TypeScript can
+  import statically. dx check reads the dict directly; the workflow generator reads the
+  JSON. Both produce the SAME shell invocation for any given check. The codegen script
+  is the bridge that makes the cross-language single-source-of-truth real instead of
+  architectural vapor — without it the framework would either keep a hardcoded copy
+  (drift hazard) or shell out to Python at test time (fragile).
+
+  Codegen invariants (enforced by tests):
+    - Output is sorted-key JSON (stable diff)
+    - Idempotent (run twice → identical bytes)
+    - Schema stable: every key present in the Python dict appears in the JSON with
+      the same nested shape; regex strings are passed through verbatim (no escaping
+      surprises across language boundaries)
+    - GP-007 CI check runs codegen + git diff --exit-code; if the JSON is stale,
+      CI fails. This is the lock that prevents silent divergence.

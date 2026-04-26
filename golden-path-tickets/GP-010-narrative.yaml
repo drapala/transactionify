@@ -1,0 +1,279 @@
+id: GP-010
+title: "Narrative — ADR-0001 + README + DEMO.md + CONTRIBUTING.md"
+tier: A
+delegate: hand
+delegate_reason: "Narrative is voice and judgment. Pipeline can review a draft, but writing it belongs to the author. AI-generated ADR reads like AI-generated ADR — fatal in interview context."
+review_mode: human_only
+blast_radius: high
+stretch: false
+
+depends_on:
+  - GP-001
+  - GP-002
+  - GP-002b
+  - GP-003
+  - GP-004
+  - GP-005
+  - GP-006
+  - GP-007
+  - GP-008
+  - GP-009a
+  - GP-009c
+  - GP-009d
+  - GP-013   # DORA aggregator — closing beat of the demo and ADR's "comparable telemetry" claim
+
+paths:
+  primary: docs/ADR-0001-architecture.md
+  secondary:
+    - docs/ADR-0001-architecture.pdf  # PDF deliverable per challenge spec (max 2 pages)
+    - README.md
+    - docs/DEMO.md
+    - docs/CONTRIBUTING.md
+    - docs/diagrams/architecture.png
+    # Kiro Evidence (PDF p.5 §3.e: "markdown steering files AND specs"). These artifacts
+    # are PRE-EXISTING in the fork — committed during the spec-first phase BEFORE any
+    # implementation ticket runs (see git log: the first 5 candidate commits after upstream
+    # are GP-000 spec-first commits — Kiro foundation, backlog, ADR/RFC scaffolds, Backstage
+    # stub, Bruno collection — establishing the spec→ticket→code chronology). This ticket's
+    # responsibility for these paths is to VERIFY-AND-UPDATE-IF-NEEDED (refine prose, add
+    # cross-references, fix drift), NOT to create from scratch. Recreating would erase the
+    # provenance the spec-first commits established.
+    - .kiro/steering/golden-path.md            # PRE-EXISTING — verify/update only
+    - .kiro/specs/golden-path/requirements.md  # PRE-EXISTING — verify/update only
+    - .kiro/specs/golden-path/design.md        # PRE-EXISTING — verify/update only
+    - .kiro/specs/golden-path/tasks.md         # PRE-EXISTING — verify/update only; mark tasks [x] done as implementations land
+    # Demo reliability scripts — repeatable backup for the live walkthrough
+    - demo/preflight.sh                              # check deps: uv, pnpm, gh auth, docker, env vars, Q App installed
+    - demo/act1_bootstrap.sh                         # uv tool install + pnpm install + dx init + governance dry-run
+    - demo/act2_failure-loop.sh                      # dx branch + lint failure + dx check + fix + dx pr + dx dora summarize
+    - demo/closing_local-env.sh                      # dx local up + aws --endpoint-url scan to show seeded fixtures (narrated, no live curl)
+    - demo/reset.sh                                  # cleanup: branch, containers, temp files, ruleset rollback
+    - demo/expected-output/dx-check-lint-fail.json        # snapshot for backup if live demo fails
+    - demo/expected-output/dora-summarize.json            # snapshot of `dx dora summarize` output for narration if artifact download flakes
+    - demo/expected-output/q-review-comment.json          # backup narration if Q App async response is slow during live demo
+    - demo/PRE-MERGE-SETUP.md                             # how to prepare the pre-approved PR (second-reviewer approval ahead of demo time) so Act 2 can demonstrate the merge path without disabling the ruleset
+  test:
+    - tests/docs/test_required_sections_present.py
+    - tests/docs/test_adr_pdf_constraints.sh
+    - tests/demo/test_demo_scripts.sh
+
+gherkin:
+  - scenario: "ADR-0001 contains the load-bearing sections AND ships as PDF (PDF spec: 'brief PDF file (max 2 pages)')"
+    given:
+      - "all upstream tickets landed; the platform exists in code"
+    when:
+      - "docs/ADR-0001-architecture.md is reviewed and the .pdf export is generated"
+    then:
+      - "Context section explains the challenge in author's voice"
+      - "Decision section describes the 4 Design Principles: (1) Convention over Configuration; (2) Local checks must predict CI; (3) Platform governs form, teams own content; (4) Shared telemetry schema is the contract — same raw events from any stack, same aggregator computing the same 4 metrics."
+      - "Consequences section is THREE bullets (no more — page budget is real). Each names a gap a CTO will probe and the honest answer: (a) **Self-governance bootstrap** — solo author cannot satisfy the 2-reviewer rule the platform itself enforces; CODEOWNERS routes platform PRs to the platform team, but until a second platform engineer exists, admin merges are auditable but not 2-reviewer-enforced (CNCF Operational-tier maturity, acknowledged not hidden). (b) **Custom workflow renderer instead of github-actions-workflow-ts** — the suggested library is a typed builder for static workflows; the PoC needed the generator to consume an external CHECK_MANIFEST JSON manifest that the CLI emits. In production the right move composes both (typed builder + manifest adapter); listed as evolution path. (c) **Polyglot stubs, not implementations** — Python adapter is real; Go/Clojure/TypeScript registry entries throw `NotImplementedError` with instructive messages pointing to per-stack docs. The framework is an extension point for those stacks, not full support today; bringing each real costs ~2d via the documented contract."
+      - "PR vs Integration pipeline boundary: PR pipeline = lint/unit/PBT/contract/cdk-synth/sandbox-verify + non-blocking AI review (synth-only at PoC fidelity). Integration pipeline = build → attest → staging → prod promotion with manual approval (deploys synth-only at PoC; real cloud deploy is evolution path requiring OIDC + per-environment AWS roles). Build job produces the attestation subject."
+      - "Future Integrations section is FOUR bullets (not eight — the rest moved to README §Roadmap, see scenario below). (1) Backstage live integration (stub catalog-info.yaml is the connector). (2) Live HTTP local entry-point (FastAPI adapter wrapping a Lambda handler — kept production code untouched in PoC). (3) Real Go/Clojure/TypeScript adapters via the documented RuntimeAdapter contract. (4) Multi-repo DORA aggregator rollup."
+      - "the self-application sentence is present: 'The CLI and framework artifacts in this PoC follow the same conventions they propose — Work IDs are present on commits and PR titles; the CLI check manifest is codegened into the JSON the framework workflow generator imports; every change ships with gherkin acceptance criteria in its ticket.' Three claims, each independently provable: `git log --pretty=%s | grep -E '^GP-[0-9]+:'` shows Work IDs; `packages/framework/src/generated/check-manifest.json` exists; each ticket YAML has gherkin. The sentence does NOT claim 'branches carry Work IDs' (the spec-first commits live on the default branch by design, not on per-ticket feature branches; feature branches with Work IDs appear after dispatch creates them — overclaiming branches pre-dispatch would be falsifiable in 5s)."
+      - "docs/ADR-0001-architecture.pdf exists and is AT MOST 2 pages (verified by pdfinfo, fail-loud if missing). To fit the 2-page budget the ADR contains ONLY: title + context (1 paragraph), architecture diagram, 4 Design Principles (one line each), Homologation answer (1 paragraph), Scalability answer (1 paragraph), Shift-Left Strategy (1 paragraph), 3 Consequences, PR/Integration boundary one-liner, 4 Future Integrations, self-application sentence. Everything else (Industry References, CLI surface, production-form caveat, security posture, signed-commits framing, dx review framing, pre-push scope framing, full Roadmap) lives in the README — pdfinfo will reject the file if it spills onto page 3."
+
+  - scenario: "README has install + demo + production-form caveat + CLI surface + Industry References (the chunky parts the ADR refused to host)"
+    given:
+      - "the fork README"
+    when:
+      - "rendered on GitHub"
+    then:
+      - "the first section explains: how to install dx (uv tool install), how to run the demo"
+      - "an explicit callout/quote-block contains: 'Packages live inside this fork as a dogfooding convenience for the PoC. In production, packages/cli, packages/framework, and packages/shared-schemas would have independent SemVer releases; Transactionify and other services would consume them as external dependencies.'"
+      - "the architecture diagram (architecture.png) renders inline"
+      - "section 'CLI surface' lists the 7 functional commands shipped in this PoC: `dx init` (scaffold .dx.yaml + PR template + pre-push hook), `dx check` (lint + unit + PBT + contract + work_id), `dx branch` (Work ID-enforcing branch creation), `dx pr` (Work ID-enforcing PR submission), `dx local up/down` (LocalStack + seeded DynamoDB), `dx governance apply` (apply ruleset), `dx dora summarize` (compute Deployment Frequency, Lead Time for Changes, Change Failure Rate, MTTR from raw events JSONL — closes the PDF p.3 'Core Metrics' deliverable from capture into computation). Each links to the relevant section. Pre-push hook installation is part of `dx init` (not a separate command — earlier draft listed `dx hooks install` as a 7th surface; that command does not exist in the PoC; the actual 7th surface is `dx dora summarize` from GP-013, NOT a hook installer). NO `dx review` command — see ADR Consequence (e) for the gate-vs-action framing."
+      - "section 'Industry References' is exactly 5 bullets (DORA, CNCF maturity, shift-down, InnerSource, attestations/SLSA) — these were moved out of the 2-page ADR to keep the ADR focused on decisions"
+      - "section 'Working with AI agents' points to .kiro/steering/ and .kiro/specs/"
+      - "section 'Security posture' explains the SLSA build-attestation chain (PoC ships SLSA L1-equivalent provenance via attest-build-provenance@v1; evolution to L2 via cosign keyless OIDC + Rekor transparency log + cosign verify-attestation on deploy). Threat model: compromised build runner → fails signature verification (attacker lacks OIDC claim); registry tampering → fails Rekor check; downgrade attack → deploy job has no fallback. Notes that attestation subject is the bundle (`service-package.tgz`) rather than per-Lambda-asset zip digests; per-asset is evolution path."
+      - "section 'Pre-push hook scope' explains: hook runs `dx check work_id` + `dx check lint` + a fast unit-test subset (`pytest -m 'not slow' --maxfail=1 -q`); the slow tests + integration tests run in CI as required status checks. Both client-side and server-side coverage satisfy PDF p.4 §3.b 'tests/linting' literally."
+      - "section 'Reviewals' explains: the platform standardizes the *gate* (server-side ruleset + CODEOWNERS routing + Amazon Q App + PR template), not a `dx review` CLI action. Review actions belong in the reviewer's tooling (web UI, gh CLI, IDE plugin). The convention enforced is 'reviews HAPPENED', enforced by the ruleset regardless of which tool the reviewer used."
+      - "section 'Roadmap' (extended Future Integrations beyond the 4 in the ADR): test discipline check (.dx.yaml.test_discipline.banned_patches), CDK construct path (LambdaServiceConstruct wrapping the 6-Lambda pattern), signed-commits enforcement (opt-in or ratchet), `dx review` CLI command (only if a future requirement demands platform-mediated review actions), SLSA L2 (cosign + Rekor + verify-on-deploy)."
+      - "section 'Transactionify API' (or equivalent) preserves the upstream README's endpoint summary (POST /api/v1/accounts, POST /accounts/{id}/payments, GET /accounts/{id}/balance, GET /accounts/{id}/transactions) — a CTO who wants to read the service's own surface should not have to git checkout the upstream commit to find it. Either preserve a top-level section or move it to docs/API.md and link from the README"
+
+  - scenario: "DEMO.md scripts the 5-minute walkthrough as 2 acts + closing; uses Git-direct install (PDF requirement)"
+    given:
+      - "a clean clone of the fork"
+    when:
+      - "DEMO.md is followed step-by-step"
+    then:
+      - "Act 1 (Bootstrap, ~1.5 min): `uv tool install git+<repo-url>#subdirectory=packages/cli` (Git-direct install via uv's subdirectory= query param) → `dx init` → show .dx.yaml → `pnpm add git+<repo-url>#path:/packages/framework` for workspace consumers (pnpm subdirectory syntax: `#path:/<subdir>` for the standard form; the ref+path combo `#<ref>&path:/<subdir>` is also valid pnpm — the wrong form is `&path:` standalone without a `#<ref>` prefix) → regen workflows → `dx governance apply` → `gh ruleset list`"
+      - "Pre-demo prep — trigger the PR pipeline 3-4 times during the days before the live walkthrough so the dora-events.jsonl artifact has substance. Specifically: (1) one PR that lands successfully (deployment outcome: success); (2) one PR that intentionally fails the lint check then is fixed (a failure deployment + a rework deployment with is_rework: true and recovered_from_failure_id pointing at the prior failure — populates Change Failure Rate AND MTTR); (3) one or two more successful runs to give Deployment Frequency a non-trivial denominator. Without this, the closing beat's 4 numbers print as mostly zeros/nulls (single-event window). Document this in demo/PRE-MERGE-SETUP.md alongside the second-reviewer arrangement."
+      - "Act 2 (Failure Loop + DORA, ~3 min): `dx branch GP-999 'feat: add validator'` → make a change with an intentional lint/contract failure → `dx check` exits non-zero locally (mechanical fail; same code path as CI — Design Principle 2 visible) → fix → `dx check` green → `dx pr` (validates branch + commits + title via CHECK_MANIFEST regex BEFORE network call, opens PR) → workflow runs → blocking checks (lint/unit/pbt/contract/cdk-synth/work-id-pr-title/sandbox-verify) pass → Q review request is triggered NON-BLOCKING. Narration script the candidate says verbatim: 'Q review is asynchronous, typically 3-10 minutes; the PR you are seeing has a Q review from a previous run; the workflow gh pr comment step is what triggers the next one in real time. We deliberately do not block on Q to keep PR cycle time predictable.' Show the gh pr comment /q review step in the workflow; show the actual Q response if it arrived in time, OTHERWISE show the expected-output snapshot — never wait live for an async GitHub App → merge path is demonstrated via a PRE-APPROVED PR (open ahead of demo, second-reviewer approval already in place; the 2-reviewer ruleset from GP-009c is what we WANT in production, so we DEMONSTRATE merge through it, never disable it) → if a second reviewer is unavailable, narrate the protected merge state ('in production this PR waits for a second reviewer') without attempting merge → integration runs after merge → download `dora-events` artifact → run `dx dora summarize --events ./dora-events.jsonl` → 4 metrics print in the terminal: Deployment Frequency, Lead Time for Changes, Change Failure Rate, MTTR. THIS is the closing beat of Act 2 — converts 'we capture raw events' into 'here are the 4 numbers PDF asked for, computed from real CI events'."
+      - "Closing (~1 min): `dx local up` brings up LocalStack with seeded DynamoDB. Show one `aws --endpoint-url=http://localhost:4566 dynamodb scan --table-name <table>` returning the seeded fixtures. NO live HTTP curl (the FastAPI local adapter was cut from PoC scope to keep production code untouched — see ADR Future Integrations). Final sentence: 'Schemas codegened, conventions enforced at submission, telemetry comparable across stacks. Platform governs form so teams own content.'"
+      - "Total runtime: 5-6 minutes; the cut to 2-acts + closing is deliberate — Act 3 was previously a live curl through FastAPI/uvicorn/boto3-endpoint-switch, the highest flake surface in the demo, replaced with a narrated LocalStack scan that proves the same 'no cloud latency' point without the failure modes."
+
+  - scenario: "Demo reliability — scripts mirror DEMO.md and use only public commands"
+    given:
+      - "demo/ contains preflight.sh, act1_bootstrap.sh, act2_failure-loop.sh, closing_local-env.sh, reset.sh"
+      - "DEMO.md is the human-readable runbook (so the author can run by hand if interrupted)"
+    when:
+      - "the scripts are inspected and tests/demo/test_demo_scripts.sh runs"
+    then:
+      - "every command invoked is a public surface: `dx init`, `dx check`, `dx branch`, `dx pr --dry-run`, `dx governance apply --dry-run`, `dx local up/down`, `dx dora summarize`, `aws --endpoint-url`, `gh pr ...`, `docker compose ...` — NO calls to private modules or internal scripts; NO live HTTP curl through a FastAPI adapter (that path was cut from PoC)"
+      - "preflight.sh checks (each exits 1 with actionable hint if it fails — no warnings, no `|| echo`): uv installed; pnpm installed AND pnpm --version >= 9 (Git subdirectory install syntax verified); gh authenticated AND has admin permission on target repo; docker running; GH_TOKEN present; Amazon Q Developer GitHub App installed on target repo; LocalStack image already pulled (avoids cold-pull during demo on hotel WiFi); a fresh `pnpm add git+file://$PWD/.git#HEAD&path:packages/framework` in /tmp succeeds (validates the Git-direct install path the candidate will run live in Act 1 — empirical verification rather than just grepping the documentation)"
+      - "each act script is idempotent (re-running does not break state) AND respects exit codes (does not swallow failures with `|| true` to hide errors)"
+      - "reset.sh tears down everything the scripts created: demo branch, LocalStack containers, dx-installed tools, ruleset rollback if applied — does NOT touch unrelated state"
+      - "demo/expected-output/ contains 3 JSON snapshots for fallback narration if live execution flakes (dx-check-lint-fail, dora-summarize, q-review-comment)"
+      - "shellcheck (or bash -n) passes on every script in demo/"
+
+  - scenario: "Kiro Evidence is captured as steering files AND specs (PDF p.5 §3.e literal requirement)"
+    given:
+      - "PDF p.5 §3.e literally requires: 'Inclusion of the markdown steering files AND specs used to provide context for Spec-Driven Development and AI-automated reviews'"
+      - ".kiro/steering/golden-path.md is committed"
+      - ".kiro/specs/golden-path/{requirements,design,tasks}.md are also committed (the 'specs' half of the requirement — do NOT punt to stretch)"
+    when:
+      - "a Kiro user opens the repo"
+    then:
+      - "Kiro discovers the steering file and uses it as a system prompt"
+      - "Kiro discovers the specs directory and uses it for Spec-Driven Development workflow"
+      - "steering documents: project conventions (.dx.yaml fields), commands (dx init/check/branch/pr/local up/governance apply/dora summarize), Work ID format, the four Design Principles"
+      - "specs documents: requirements.md (PDF deliverables traceability), design.md (architecture summary), tasks.md (enumerates ALL 15 active tickets as Kiro tasks: GP-000, GP-001, GP-002, GP-002b, GP-003, GP-004, GP-005, GP-006, GP-007, GP-008, GP-009a, GP-009c, GP-009d, GP-010, GP-013 — count must match the README backlog table; do NOT cherry-pick a subset)"
+      - "all four files are hand-written, short (~1 page each), dense; specs in particular are NOT auto-generated from the YAMLs to avoid AI-flavored prose"
+      - "the README links to .kiro/ under a 'Working with AI agents' section"
+
+  - scenario: "CONTRIBUTING.md explains adapter onboarding and InnerSource patterns"
+    given:
+      - "the CONTRIBUTING.md"
+      - "docs/RFC-template.md and docs/ADR/{template,0002-rfc-process}.md are PRE-EXISTING in the fork (committed during the spec-first phase, before this ticket runs)"
+    when:
+      - "a hypothetical new team reads it"
+    then:
+      - "it explains how to add a new RuntimeAdapter (link to docs/adapters/)"
+      - "it explains the RFC process and links DIRECTLY to docs/RFC-template.md (not vapor — the template file exists)"
+      - "it links to docs/ADR/template.md for architectural decisions and to docs/ADR/0002-rfc-process.md as the placeholder ADR establishing the RFC process itself"
+      - "it names the InnerSource patterns in use: Trusted Committer, Explicit Governance Levels, RFCs"
+      - "validation enforces non-vapor: grep that CONTRIBUTING.md actually references docs/RFC-template.md and docs/ADR/template.md — mentioning 'RFC process' without linking to the actual template file is vapor"
+
+  - scenario: "Pre-existing spec-first artifacts are verified, not recreated"
+    given:
+      - "the fork already contains: .kiro/steering/golden-path.md, .kiro/specs/golden-path/{requirements,design,tasks}.md, docs/ADR/{template,0002-rfc-process}.md, docs/RFC-template.md, catalog-info.yaml, docs/api/* (all committed during spec-first phase by the candidate, BEFORE GP-000 implementation runs)"
+      - "git log shows these as the candidate's first 5 commits after upstream (Kiro foundation, backlog, ADR/RFC scaffolds, Backstage stub, Bruno collection)"
+    when:
+      - "this ticket's hand-written work proceeds (ADR-0001, README, DEMO.md, CONTRIBUTING.md, demo/ scripts, per-stack docs/adapters/<stack>.md)"
+    then:
+      - "the candidate VERIFIES the pre-existing artifacts are still consistent with the implemented platform (e.g. .kiro/specs/golden-path/tasks.md has [x] checkboxes for tickets that landed)"
+      - "the candidate UPDATES tasks.md status fields ([ ] → [x]) as implementations land via dispatch — does not rewrite the file"
+      - "if a spec discovers a contradiction with reality (e.g. a requirement turned out infeasible during implementation), the candidate edits the spec WITH a commit subject like `GP-NNN: refine design.md §X (implementation revealed Y)` — preserving provenance"
+      - "the candidate does NOT delete and recreate any pre-existing artifact; doing so would erase the spec→ticket→code chronology in the git log"
+
+out_of_scope:
+  - "Multi-language docs"
+  - "API reference auto-generation (Sphinx, TypeDoc, etc.)"
+  - "Long theoretical exposition; see ammunition.md (private) for the framing material"
+  - "Multiple architecture diagrams"
+  - "Migration guides from other platforms"
+  # Demo reliability — explicit anti-patterns to avoid
+  - "Additional demo scenarios beyond the 3 acts (no act4, no 'alternative paths', no 'happy path B') — overengineering"
+  - "Simulating commands or features the platform does not actually have (would be a lie under live scrutiny)"
+  - "Calling internals or private modules from demo scripts — only the public dx/gh/curl/docker surface"
+  - "`|| true` / try-except magic that hides real failures during demo (failures should fail loud; reset.sh handles cleanup)"
+  - "Recording the full Loom walkthrough as part of THIS ticket — Loom is the author's pre-submission step (see notes), not a deliverable file"
+
+validation_commands:
+  - "uv run pytest tests/docs/test_required_sections_present.py -v"
+  - "test -f docs/diagrams/architecture.png"
+  - "test -f docs/ADR-0001-architecture.pdf  # PDF deliverable required by challenge"
+  # P0-2 — fail-loud page-count validation (was gameable: chained `command -v pdfinfo && ...` could short-circuit silently when pdfinfo missing)
+  - "command -v pdfinfo || { echo 'ERROR: pdfinfo required to verify ADR page-count constraint; install poppler-utils (brew install poppler / apt install poppler-utils)' >&2; exit 1; }"
+  - "PAGES=$(pdfinfo docs/ADR-0001-architecture.pdf | awk '/^Pages/ {print $2}') && test \"$PAGES\" -le 2 || { echo \"ERROR: ADR is $PAGES pages (PDF spec page 4: 'brief PDF file (max 2 pages)' — hard contract)\" >&2; exit 1; }"
+  - "test -f .kiro/steering/golden-path.md  # Kiro Evidence — steering"
+  - "test -f .kiro/specs/golden-path/requirements.md && test -f .kiro/specs/golden-path/design.md && test -f .kiro/specs/golden-path/tasks.md  # Kiro Evidence — specs (PDF p.5 §3.e: 'steering files AND specs')"
+  - "grep -qF 'The CLI and framework artifacts in this PoC follow the same conventions they propose — branches and commits carry Work IDs; the CLI check manifest is codegened into the JSON the framework workflow generator imports; every change ships with gherkin acceptance criteria in its ticket' README.md"
+  # P1-9 — drop the negative greps for old sentences (paraphraseable, not enforcing the semantic property); replace with a positive verifiable claim
+  - "test \"$(git log --since='3 months ago' --pretty=%s | grep -cE '^(LL|GP)-[0-9]+:')\" -ge 5 || { echo 'ERROR: fewer than 5 recent commits carry a Work ID prefix; the self-application claim is not yet verifiable in git log. Either dispatch the pipeline to produce GP-NNN commits OR amend the README to defer the claim.' >&2; exit 1; }"
+  - "test -f packages/framework/src/generated/check-manifest.json || { echo 'ERROR: codegened manifest absent; self-application claim about codegen-driven workflow generator is not verifiable' >&2; exit 1; }"
+  - "grep -qF 'dogfooding convenience for the PoC' README.md"
+  - "grep -qF 'uv tool install git+' docs/DEMO.md  # Git-direct install instruction is present"
+  - "grep -qE 'pnpm (add|install) git\\+[^ ]+#(path:/|[a-zA-Z0-9._-]+&path:/)' docs/DEMO.md  # pnpm subdirectory install: either #path:/<dir> (standard) or #<ref>&path:/<dir> (ref+path); NOT bare &path: without #<ref> first"
+  - "grep -qF 'PR pipeline owns' docs/ADR-0001-architecture.md  # explicit PR/Integration boundary"
+  # Demo reliability checks
+  - "for s in demo/preflight.sh demo/act1_bootstrap.sh demo/act2_failure-loop.sh demo/closing_local-env.sh demo/reset.sh; do test -x \"$s\" && bash -n \"$s\"; done  # all scripts present, executable, syntactically valid"
+  - "if command -v shellcheck; then shellcheck demo/*.sh; else echo 'shellcheck not installed; skipped'; fi  # if-then-else — does NOT mask shellcheck failures"
+  - "test -f demo/expected-output/dx-check-lint-fail.json && test -f demo/expected-output/dora-summarize.json && test -f demo/expected-output/q-review-comment.json  # fallback snapshots present"
+  # P0-3 — pnpm Git-direct install empirically validated FAIL-LOUD (the previous version had two bugs: (a) path resolved to /Users/drapala/Downloads/golden-path-tickets/.git which does not exist; (b) trailing `|| echo` swallowed every failure into exit 0, masking the broken path. Both fixed.) Consolidated into a single shell block so $FORK_GIT persists across the steps.
+  - |
+    command -v pnpm >/dev/null || { echo 'ERROR: pnpm required to validate Git-direct install path' >&2; exit 1; }
+    FORK_GIT="$(git rev-parse --show-toplevel 2>/dev/null)/.git"
+    test -d "$FORK_GIT" || { echo "ERROR: cannot resolve fork git dir at $FORK_GIT (run validations from inside the fork's git tree)" >&2; exit 1; }
+    rm -rf /tmp/pnpm-install-test && mkdir /tmp/pnpm-install-test
+    ( cd /tmp/pnpm-install-test \
+        && pnpm init >/dev/null \
+        && pnpm add "git+file://$FORK_GIT#HEAD&path:packages/framework" \
+        && test -d node_modules/@golden-path/framework ) \
+      || { echo 'ERROR: pnpm Git-direct install failed — DEMO.md install command will not work live. Verify pnpm version (>= 9), the &path: subdirectory syntax, and that packages/framework/package.json declares name @golden-path/framework. NO fallback to `|| echo` — the demo command must work.' >&2; exit 1; }
+  # ADR is decisions+consequences only — Industry References + CLI surface live in README to fit 2 pages
+  - "! grep -qF 'Industry References' docs/ADR-0001-architecture.md  # moved to README"
+  - "grep -qF 'Industry References' README.md  # confirmed location"
+  - "grep -qE 'CLI surface|## Commands' README.md  # CLI surface section is in README, not the 2-page ADR"
+  - "grep -qE 'dx dora summarize' README.md  # CLI surface lists all 7 commands (P1-fix — earlier README count was 6 because GP-013's dx dora summarize was added after the initial CLI surface enumeration)"
+  - "! grep -qE '^\\s*dx review\\b' README.md  # NO dx review command (intentional — see ADR Consequence (e) gate-vs-action framing); fail loud if a future ticket accidentally adds it without the corresponding ADR rewrite"
+  # PDF coverage closure — content density was unsustainable in the 2-page ADR; following items moved to README sections (verified per-section there). The ADR keeps only the Page-1/Page-2 essentials.
+  - "grep -qE 'cosign|sigstore|SLSA|Rekor' README.md  # SLSA threat model lives in README §Security posture, NOT the ADR (page-budget reclaim)"
+  - "grep -qE 'pre-push|Pre-push hook scope' README.md  # pre-push scope framing in README, NOT ADR"
+  - "grep -qE 'gate.*not a CLI action|reviewals.*gate|gate-vs-action' README.md  # reviewals gate framing in README, NOT ADR"
+  - "grep -qE 'CDK construct|LambdaServiceConstruct' README.md  # CDK construct evolution path in README §Roadmap"
+  - "grep -qE 'test_discipline|banned_patches|test discipline' README.md  # discipline-check evolution path in README §Roadmap"
+  # ADR keeps ONLY the 4 anchor bullets; pdfinfo enforces the 2-page limit. We do NOT grep the ADR for any of the items above — they were moved out for budget reasons.
+  # CONTRIBUTING.md non-vapor — references the actual template files (P1-9 closure)
+  - "test -f docs/CONTRIBUTING.md || test -f CONTRIBUTING.md  # CONTRIBUTING.md exists at one of the two conventional locations"
+  - "CONTRIB=$(test -f docs/CONTRIBUTING.md && echo docs/CONTRIBUTING.md || echo CONTRIBUTING.md); grep -qE 'docs/RFC-template\\.md|RFC.*template' \"$CONTRIB\" || { echo \"ERROR: CONTRIBUTING.md must reference docs/RFC-template.md (the template file is committed pre-dispatch; mentioning 'RFC process' without the link is vapor — P1-9)\" >&2; exit 1; }"
+  - "CONTRIB=$(test -f docs/CONTRIBUTING.md && echo docs/CONTRIBUTING.md || echo CONTRIBUTING.md); grep -qE 'docs/ADR/template\\.md|ADR.*template' \"$CONTRIB\" || { echo \"ERROR: CONTRIBUTING.md must reference docs/ADR/template.md\" >&2; exit 1; }"
+  # Pre-existing artifacts — verify provenance is preserved (the spec-first commits MUST appear before any implementation commit in git log)
+  - "FIRST_GP_COMMIT=$(git log --format='%H %s' --reverse | grep -E '^[a-f0-9]+ GP-' | head -1 | awk '{print $1}'); KIRO_COMMIT=$(git log --format='%H %s' --diff-filter=A -- .kiro/specs/golden-path/requirements.md 2>/dev/null | head -1 | awk '{print $1}'); test -n \"$KIRO_COMMIT\" && test -n \"$FIRST_GP_COMMIT\" && [ \"$(git rev-list --count $FIRST_GP_COMMIT...$KIRO_COMMIT 2>/dev/null || echo 999)\" -le 10 ] || echo 'WARNING: Kiro spec commit not found in expected position — provenance chain may be disrupted (this is a soft warning, not a fail; verify git log manually)'"
+  - "test -f demo/PRE-MERGE-SETUP.md && grep -qE 'second(-| )reviewer|pre-approved' demo/PRE-MERGE-SETUP.md  # merge-path setup documented"
+  - "! grep -E '\\|\\| true' demo/*.sh  # no failure-hiding"
+  - "! grep -E '_internal|__private' demo/*.sh  # public surface only"
+
+demo_signal: "ADR + README + DEMO are the entrance. CTO opens README first; the narrative makes the rest of the artifacts legible. Zero LLM-flavored prose."
+
+notes: |
+  This ticket is the only one delegate: hand. The reason is durable: AI-flavored ADR/README is the failure mode that loses Staff-level interviews even when the implementation is good.
+
+  Concrete process for the author:
+    1. Write ADR-0001.md first (1.5h max). Use ammunition.md §0 (Design Principles, Industry References) as a scaffold; rewrite in own voice. Do NOT copy the ammunition's theoretical sections — those are reasoning, not narrative.
+    2. Export to PDF via pandoc or browser print-to-PDF. Verify it fits in 2 pages; tighten prose if not.
+       Example: pandoc docs/ADR-0001-architecture.md -o docs/ADR-0001-architecture.pdf --pdf-engine=xelatex -V geometry:margin=1in
+    3. Write README second (45m). Install + demo + the production-form callout + Working-with-AI-agents pointer to .kiro/steering/.
+    4. Write DEMO.md third (1h, including dry-run). Time each act. Demo MUST use Git-direct install commands (uv tool install git+...; pnpm add git+...) not editable links — PDF requires the install path that an external team would use.
+    5. Hand-write .kiro/steering/golden-path.md: project conventions, dx commands, Work ID format, the 4 Design Principles. Short and dense (1 page).
+    6. CONTRIBUTING.md (30m). Short.
+    7. Demo scripts (1h): preflight + 3 acts + reset, mirroring DEMO.md exactly. Public surface only. No magic retry. Capture expected-output JSONs from a successful local run.
+    8. After all written: invoke pre-pr-review on the docs PR. Findings are reviewer feedback, not author replacement.
+    9. Record Loom backup AFTER demo dry-run is solid, BEFORE submission.
+
+  Demo reliability philosophy:
+    The scripts exist to reduce operational risk during the live walkthrough — they
+    do NOT replace DEMO.md. If the CTO interrupts and asks 'do it by hand', the
+    author runs the same commands manually from DEMO.md. If the environment flakes,
+    the author narrates from expected-output/ snapshots and the Loom backup.
+
+    The scripts must use ONLY public commands (dx init, dx check, dx branch, dx pr,
+    dx local up, gh, docker, curl). No calls to internal modules. No `|| true` to
+    hide failures. The validation grep checks enforce both rules.
+
+    Two acts + closing only. Resist the temptation to add 'alternative paths' or
+    'happy path B' or to bring back the live HTTP curl from a previous draft.
+    The 5-minute window does not survive scenario branching, and the live curl
+    through FastAPI/uvicorn/boto3-endpoint-switch was the demo's highest flake
+    surface — cut to LocalStack scan + narration.
+
+    Two operational hazards in Act 2 — handled by design:
+      1. Amazon Q is an async GitHub App. The workflow TRIGGERS '/q review' via
+         `gh pr comment`; the App responds whenever it responds. Live demo MUST NOT
+         wait for Q. Show the trigger step + the response if it happens to arrive,
+         otherwise narrate from demo/expected-output/q-review-comment.json.
+      2. The 2-reviewer ruleset applied by GP-009c blocks self-merge by the author.
+         For the demo: open a pre-approved PR (collaborator account approves ahead
+         of demo time) — this is the PREFERRED path because it demonstrates the
+         working merge through the protection, not around it. If a second reviewer
+         is unavailable, narrate the protected state ('in production this would
+         wait for a second reviewer') without attempting merge. NEVER disable the
+         ruleset and NEVER use admin bypass — both invalidate the very thing being
+         demonstrated. If the CTO presses on bypass, the answer is 'the platform
+         only governs if the author respects it; bypass = author is the breach'.
+
+  PDF deliverables traceability (for self-check before submission):
+    - "brief PDF file (max 2 pages)"          → docs/ADR-0001-architecture.pdf
+    - "AWS Kiro Evidence (Plus)"              → .kiro/steering/golden-path.md
+    - "demo using uv tool install + pnpm Git" → DEMO.md Act 1 commands
+    - PR/Integration pipeline boundary        → ADR Decision section

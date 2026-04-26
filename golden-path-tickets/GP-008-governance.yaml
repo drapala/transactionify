@@ -1,0 +1,180 @@
+id: GP-008
+title: "Governance — ruleset generator + dx governance apply"
+tier: A
+delegate: pipeline
+delegate_reason: "Wrapper over `gh api`; AC is integration-test-driven (mock the gh call)."
+review_mode: pre_pr_review
+blast_radius: high
+stretch: false
+
+depends_on:
+  - GP-002
+  - GP-005
+
+paths:
+  primary: packages/framework/src/governance/rulesets.ts
+  secondary:
+    - packages/framework/src/governance/types.ts
+    - packages/framework/src/governance/defaults.ts
+    - packages/cli/src/dx/commands/governance.py
+    - packages/cli/src/dx/clients/gh_api.py
+  test:
+    - packages/framework/test/governance/rulesets.test.ts
+    - packages/cli/tests/test_governance.py
+
+gherkin:
+  - scenario: "Default ruleset is parameterized by required checks; the list is DERIVED, not hardcoded"
+    given:
+      - "default ruleset config in governance/defaults.ts accepts a list of check names from the caller"
+      - "the canonical source of truth for which jobs are blocking is the regenerated workflow (each job without continue-on-error is required)"
+    when:
+      - "buildDefaultRuleset({ requiredChecks: extractBlockingJobsFromWorkflow('.github/workflows/pr.yml') }) is called"
+    then:
+      - "ruleset JSON includes pull_request rule with required_approving_review_count: 2"
+      - "ruleset JSON includes required_status_checks rule with the contexts derived from the workflow (NOT a hardcoded list)"
+      - "ruleset JSON includes deletion + non_fast_forward (no force push) rules"
+      - "ruleset JSON does NOT include `required_signatures` / commit_signature rule by default (P0-7 audit cut — including it would block the solo author's demo merge without GPG/SSH signing pre-configured, invalidating the very enforcement being demonstrated; signed-commits is documented as evolution path in the ADR, NOT a default)"
+      - "ruleset has top-level fields target: 'branch' (string) and conditions: { ref_name: { include: ['refs/heads/main'], exclude: [] } } — this is the actual GitHub Rulesets API shape; an earlier draft used a non-existent 'target.include' field which would 422 against the real API"
+      - "if a downstream ticket adds a new blocking job to the workflow (e.g. a future test-discipline check listed in the ADR Future Integrations), regenerating the ruleset automatically protects that context — no separate ticket needed to update the protected list. The derivation is the protection mechanism."
+
+  - scenario: "extractBlockingJobsFromWorkflow correctly identifies required contexts"
+    given:
+      - "a generated PR workflow with jobs: lint, unit-tests, pbt, contract, work-id-pr-title, cdk-synth, sandbox-verify, ai-review (continue-on-error: true), dora-emit (if: always())"
+    when:
+      - "extractBlockingJobsFromWorkflow parses the YAML"
+    then:
+      - "returned list includes every job with no continue-on-error AND no `if: always()` — i.e. lint, unit-tests, pbt, contract, work-id-pr-title, cdk-synth, sandbox-verify (P1-12 — the canonical name from GP-007 is `sandbox-verify` because the PoC step is synth-only, not a real deploy; an earlier draft used `deploy-sandbox` and ruleset derivation looked for a context that did not exist, making protection illusory)"
+      - "ai-review is excluded (continue-on-error: true)"
+      - "dora-emit is excluded (terminal, if: always())"
+
+  - scenario: "Generated ruleset JSON conforms to GitHub Rulesets API shape"
+    given:
+      - "the generated ruleset object"
+    when:
+      - "validated against a cached GitHub Rulesets API JSON Schema (or shape test)"
+    then:
+      - "validation passes"
+      - "name field is set (default: 'golden-path-default')"
+
+  - scenario: "dx governance apply --dry-run prints the planned create-or-update operation"
+    given:
+      - "a fork repo with .dx.yaml present"
+    when:
+      - "user runs `dx governance apply --dry-run --json`"
+    then:
+      - "the command first lists existing rulesets via `gh api /repos/{owner}/{repo}/rulesets` to determine create vs update"
+      - "stdout is JSON with: target_repo, ruleset_name, http_method (POST or PUT), endpoint, request_body, existing_ruleset_id (null if create)"
+      - "no mutating `gh api` call is made"
+      - "exit code 0"
+
+  - scenario: "dx governance apply creates ruleset (POST) when name does not exist"
+    given:
+      - "GH_TOKEN with admin scope"
+      - "no ruleset named golden-path-default exists on the target repo"
+    when:
+      - "dx governance apply --json runs"
+    then:
+      - "command POSTs to /repos/{owner}/{repo}/rulesets with the generated body"
+      - "stdout JSON reports: status: 'created', ruleset_id: <new id>, applied_at: <timestamp>"
+      - "exit code 0"
+
+  - scenario: "dx governance apply updates ruleset (PUT by id) when name exists"
+    given:
+      - "GH_TOKEN with admin scope"
+      - "a ruleset named golden-path-default already exists with id 42"
+    when:
+      - "dx governance apply --json runs"
+    then:
+      - "command resolves ruleset_id=42 from the list call"
+      - "command PUTs to /repos/{owner}/{repo}/rulesets/42 (NOT /rulesets/{name} — name is not a path component in the GitHub API)"
+      - "stdout JSON reports: status: 'updated' (or 'unchanged' if body matches), ruleset_id: 42"
+      - "exit code 0"
+
+out_of_scope:
+  - "Auto-discovery of repo owner from multiple remotes (use first matching origin)"
+  - "Ruleset deletion or reset commands"
+  - "Per-team / per-environment ruleset variants"
+  - "Audit log / drift detection (future)"
+
+validation_commands:
+  - "pnpm --filter @golden-path/framework test packages/framework/test/governance/"
+  - "uv run pytest packages/cli/tests/test_governance.py -v"
+  - "uv run dx governance apply --dry-run --repo owner/repo --json | jq -e '.request_body.rules | length >= 4'"
+  - "uv run dx governance apply --dry-run --json | jq -e '.request_body.rules[] | select(.type == \"required_status_checks\")'"
+  # �� default ruleset MUST NOT include required_signatures (would block solo author's demo merge without GPG setup; signed-commits is evolution path)
+  - "uv run dx governance apply --dry-run --json | jq -e '[.request_body.rules[] | select(.type == \"required_signatures\")] | length == 0' || { echo 'ERROR: default ruleset must not include required_signatures (P0-7); move it to opt-in via .dx.yaml.governance.signed_commits=true' >&2; exit 1; }"
+  - "uv run dx governance apply --dry-run --json | jq -e '[.request_body.rules[] | select(.type == \"non_fast_forward\")] | length == 1'  # no force push is in the default"
+  - "uv run dx governance apply --dry-run --json | jq -e '[.request_body.rules[] | select(.type == \"deletion\")] | length == 1'        # no branch deletion is in the default"
+
+demo_signal: "Live: `dx governance apply` against the fork → `gh ruleset list` shows golden-path-default with two-reviewer enforced. Branch protection is code, not a checklist."
+
+notes: |
+  Mock the `gh api` calls in unit tests; integration test against the fork itself is
+  part of GP-009c. The CLI command shells out to `gh` rather than implementing the
+  GitHub API client — keeps the auth surface simple (gh handles tokens).
+
+  Required-checks derivation (load-bearing decision):
+    Hardcoding the list ['lint', 'small-tests', 'contract', 'cdk-synth'] would have
+    two failure modes:
+      1. Stale checks: the list misses anything added later (e.g. work-id-pr-title
+         from GP-007, or any future blocking job). Ruleset protects nothing.
+      2. Renamed checks: 'small-tests' was renamed to 'unit-tests' during PBT split
+         (GP-006). A hardcoded ruleset references a context that does not exist;
+         GitHub silently does not enforce missing contexts; protection is illusory.
+    Solution: extractBlockingJobsFromWorkflow reads the regenerated pr.yml and emits
+    the actual job names. GP-009c regenerates the workflow + applies the ruleset in
+    that order; the protection always reflects current reality.
+
+  GitHub API endpoint reality: rulesets are addressed by numeric ID, not by name.
+    - List:    GET    /repos/{owner}/{repo}/rulesets
+    - Create:  POST   /repos/{owner}/{repo}/rulesets
+    - Get:     GET    /repos/{owner}/{repo}/rulesets/{ruleset_id}
+    - Update:  PUT    /repos/{owner}/{repo}/rulesets/{ruleset_id}
+    - Delete:  DELETE /repos/{owner}/{repo}/rulesets/{ruleset_id}
+  Idempotent apply requires list-then-match-by-name to find the id; any earlier draft
+  suggesting PUT /rulesets/{name} would 404 in production.
+  Source: https://docs.github.com/rest/repos/rules
+
+  Request body shape (GitHub Rulesets API — the field names are NOT free choice):
+  ```
+  {
+    "name": "golden-path-default",
+    "target": "branch",                                     # top-level enum: branch | tag | push
+    "enforcement": "active",                                # active | evaluate | disabled
+    "conditions": {
+      "ref_name": {                                         # branches/tags this ruleset applies to
+        "include": ["refs/heads/main"],                     # OR ["~DEFAULT_BRANCH"] for the default
+        "exclude": []
+      }
+    },
+    "rules": [
+      { "type": "pull_request", "parameters": { "required_approving_review_count": 2, ... } },
+      { "type": "required_status_checks", "parameters": { "required_status_checks": [{ "context": "lint" }, ...] } },
+      { "type": "deletion" },
+      { "type": "non_fast_forward" }
+    ]
+  }
+  ```
+  The earlier-draft `target: { include: ['main'] }` field does not exist in the API
+  and would return HTTP 422. Always use `target` as a string + branch list inside
+  `conditions.ref_name.include`.
+
+  Signed commits intentionally NOT in the default ruleset (P0-7):
+    GitHub's `required_signatures` rule enforces that every commit on the protected
+    branch is GPG/SSH/S/MIME-signed. Including it in the default would mean: the
+    solo candidate's demo PR has unsigned commits → merge blocked by the protection
+    EVEN AFTER the 2-reviewer rule is satisfied → the demo's "merge through the
+    protection" beat fails. The candidate's local environment does not have signing
+    pre-configured (no `git config commit.gpgsign true`, no GPG key uploaded to
+    GitHub).
+
+    Two ways to add signed-commits enforcement when the platform team scales:
+      (1) opt-in rule: add `{ "type": "required_signatures" }` to the rules array
+          when `.dx.yaml` declares `governance.signed_commits: true` — keeps the
+          default permissive, lets organizations that have the GPG/SSH onboarding
+          flow turn it on per-repo.
+      (2) ratchet: ship signed-commits in evaluate mode first (`enforcement: "evaluate"`
+          on a sibling ruleset that ONLY enforces signatures), let CI surface the
+          gap, give teams 30 days, then promote to active.
+    Both patterns are documented in the ADR Future Integrations section. Neither
+    is in the PoC default.

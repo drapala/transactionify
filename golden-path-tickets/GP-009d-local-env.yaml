@@ -1,0 +1,140 @@
+id: GP-009d
+title: "Local environment — LocalStack + dx local up/down + seed (PDF: 'without cloud latency')"
+tier: A
+delegate: pipeline
+delegate_reason: "Pure infra glue: docker-compose + init script + seed + dx local wrapper. Zero production-code change. Demo narrates the local stack instead of running an end-to-end HTTP path live (FastAPI adapter scope was cut to remove flake surface and Lambda-runtime risk)."
+review_mode: standard
+blast_radius: low
+stretch: false
+
+depends_on:
+  - GP-002
+  - GP-009a
+
+paths:
+  primary: docker-compose.yml
+  secondary:
+    - .docker/localstack-init.sh
+    - .docker/.env.local.example                  # AWS dummy creds template (LocalStack accepts test/test/us-east-1)
+    - .docker/seed_dynamodb.py                    # seed account + transactions in LocalStack via boto3
+    - packages/cli/src/dx/commands/local.py       # dx local up/down — wraps docker compose with health gating
+    - docs/LOCAL-ENV.md
+  test:
+    - tests/integration/test_local_env.sh
+    - packages/cli/tests/test_local.py  # NEW: unit test for dx local up that mocks the LocalStack health endpoint to time out, asserts non-zero exit (P1-8 — without a real test the timeout-fail-loud claim is documentation only)
+
+gherkin:
+  - scenario: "docker-compose brings up LocalStack with services transactionify needs"
+    given:
+      - "Docker is running"
+      - "docker-compose.yml pins a LocalStack version + declares the AWS services transactionify uses (dynamodb at minimum; add others only if the service depends on them)"
+    when:
+      - "the user runs `docker compose up -d` (or `dx local up`)"
+    then:
+      - "LocalStack container starts; healthcheck passes within 30s"
+      - "the DynamoDB tables required by transactionify are created via `.docker/localstack-init.sh` on container start"
+      - "no real AWS credentials are required (LocalStack accepts dummy creds)"
+
+  - scenario: "Dummy AWS credentials are wired via .env.local.example template"
+    given:
+      - "boto3 always requires AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY at client construction; LocalStack accepts any non-empty values"
+    when:
+      - "the developer copies .docker/.env.local.example to .docker/.env.local and runs `dx local up`"
+    then:
+      - "AWS_ACCESS_KEY_ID=test, AWS_SECRET_ACCESS_KEY=test, AWS_REGION=us-east-1, AWS_ENDPOINT_URL=http://localhost:4566 are present in the example file"
+      - ".gitignore covers .docker/.env.local; only the .example template is committed"
+      - "docker-compose.yml references `env_file: .docker/.env.local` for any service that needs AWS credentials (e.g. seeder)"
+
+  - scenario: "Seed script populates LocalStack DynamoDB with deterministic fixtures"
+    given:
+      - "LocalStack is up; the table created by .docker/localstack-init.sh exists"
+      - ".docker/seed_dynamodb.py uses boto3 with endpoint_url=http://localhost:4566"
+    when:
+      - "`dx local up` runs the seed script (or the LocalStack init hook does)"
+    then:
+      - "the table has one fixture account record (deterministic UUID) + N transaction records"
+      - "running the seed twice is idempotent (uses put_item or conditional create)"
+      - "seed exit code is 0; stderr is empty on success"
+
+  - scenario: "`dx local up` wraps docker compose with platform conventions; health-check timeout is fail-loud (P1-8)"
+    given:
+      - "dx CLI installed (GP-002 + GP-009a)"
+    when:
+      - "the user runs `dx local up --json`"
+    then:
+      - "stdout JSON reports: services started, healthcheck status, exposed endpoints (LocalStack edge port: 4566)"
+      - "the command polls LocalStack /_localstack/health until all services are 'running'; if not all running within 30s, the command exits NON-ZERO with stderr: 'LocalStack health-check timed out after 30s; service status: <last health response>'. The seed script is NOT run in this case (the demo seeing a stale or empty table is worse than the demo seeing an explicit error)"
+      - "`dx local down --json` tears down cleanly (no orphaned containers, no stale volumes)"
+      - "`dx local up` is idempotent (running twice is a no-op when already healthy); a second invocation while LocalStack is in 'starting' state waits for health rather than racing the seed"
+      - "command does NOT modify any production source code; only orchestrates docker compose + seed"
+
+  - scenario: "LOCAL-ENV.md documents the offline path explicitly"
+    given:
+      - "docs/LOCAL-ENV.md is present"
+    when:
+      - "a new contributor reads it cold"
+    then:
+      - "they can run `dx local up` + inspect the seeded table in <=5 documented commands"
+      - "the doc cites the PDF requirement (page 4, deliverable 3.a): 'A mechanism to run the service and its dependencies locally to execute tests without cloud latency.'"
+      - "the doc lists exactly which AWS services LocalStack is approximating + the boundary: 'service-dependency emulation; live HTTP path is out of scope for the PoC and lives as evolution path in the ADR'"
+      - "the doc includes the explicit boto3 snippet a future contributor would use to point at LocalStack: `boto3.resource('dynamodb', endpoint_url=os.environ.get('AWS_ENDPOINT_URL'))` — informational, not a code change in this ticket"
+
+out_of_scope:
+  - "FastAPI/uvicorn local HTTP adapter (cut from PoC — was previously local_app.py; removed because it required production-code change to tools/aws/dynamodb/__init__.py and CDK Lambda asset surgery, both of which carried Lambda-runtime + cold-start regression risk for marginal demo gain)"
+  - "Hardening lib/transactionify-stack.ts Code.fromAsset calls with exclude: lists (P1-10 evolution path — flagged in ADR Future Integrations: today every Code.fromAsset('src/python') bundles the entire src/python tree; future contributors dropping notes.md or dev-tools.py into src/python/ would silently bloat the Lambda zip. Mitigation pattern is `lambda.Code.fromAsset('src/python', { exclude: ['__pycache__', '*.pyc', 'requirements-*.txt', '*.md', 'tests'] })`. Defensive fix; not load-bearing for the PoC because no ticket adds files under src/python today)"
+  - "Modifying src/python/transactionify/tools/aws/dynamodb/__init__.py (zero production-code change in this ticket)"
+  - "Modifying lib/transactionify-stack.ts (no Lambda asset surgery; no exclude lists; the stack is untouched)"
+  - "Adding requirements-local.txt under src/python/ (would risk being bundled into the Lambda zip; if FastAPI is wanted later, it lives outside src/python/)"
+  - "API Gateway emulation (LocalStack Pro feature; fragile across machines)"
+  - "Lambda runtime emulation (LocalStack Pro / Lambda emulator; brittle and not load-bearing for the PoC)"
+  - "Auth/authz fidelity (no live HTTP path means no auth surface)"
+  - "Hot reload / debug toolbars / dev ergonomics beyond LocalStack defaults"
+
+validation_commands:
+  - "test -f docker-compose.yml && test -f docs/LOCAL-ENV.md && test -f .docker/.env.local.example && test -f .docker/seed_dynamodb.py"
+  - "grep -qE '^AWS_ACCESS_KEY_ID=test' .docker/.env.local.example && grep -qE '^AWS_ENDPOINT_URL=http://localhost:4566' .docker/.env.local.example"
+  - "docker compose config -q  # syntactic validation of compose file"
+  - "uv run dx local up --json | jq -e '.status == \"healthy\"'"
+  - "uv run dx local down --json | jq -e '.stopped'"
+  # �� REAL timeout test (the prior validation only ran `docker compose down -v` and asserted nothing about timeout behavior)
+  - "uv run pytest packages/cli/tests/test_local.py::test_health_timeout_exits_nonzero -v  # asserts: when LocalStack health endpoint returns non-200 for the full timeout window, dx local up exits non-zero with stderr message; seed script is NOT invoked"
+  - "uv run pytest packages/cli/tests/test_local.py::test_health_timeout_skips_seed -v  # asserts: on timeout, no boto3 calls reach the seed module"
+  - "bash tests/integration/test_local_env.sh  # boots LocalStack, runs seed, asserts via aws --endpoint-url that the table has fixture records"
+  - "grep -qF 'without cloud latency' docs/LOCAL-ENV.md  # PDF requirement traceability (page 4 §3.a verbatim phrase)"
+  # Anti-regression — production code MUST remain untouched
+  - "! grep -qE 'AWS_ENDPOINT_URL|LOCALSTACK_ENDPOINT_URL' src/python/transactionify/tools/aws/dynamodb/__init__.py  # production dynamodb module is NOT modified by this ticket"
+  - "! test -f src/python/transactionify/local_app.py  # FastAPI local adapter is OUT OF SCOPE in this revised ticket"
+  - "! test -f src/python/requirements-local.txt  # local-only requirements MUST NOT live under src/python/ (Lambda bundling risk)"
+  - "! grep -qE 'exclude:.*local_app' lib/transactionify-stack.ts  # CDK stack is NOT modified by this ticket"
+
+demo_signal: "Closing of the demo (replaces a live Act 3): `dx local up` brings up LocalStack with the table seeded; the developer can `aws --endpoint-url=http://localhost:4566 dynamodb scan` to confirm fixtures. Narrated framing: 'The same Golden Path includes a local stack so service-dependent tests run without cloud round-trips. A live HTTP entry-point is the obvious next step — the ADR lists it as the evolution path because it requires production-code changes that are out of scope for the PoC.'"
+
+notes: |
+  PDF requirement (page 4, deliverable 3.a, verbatim): "A mechanism to run the
+  service and its dependencies locally to execute tests without cloud latency."
+
+  This ticket satisfies the requirement at the dependencies layer (LocalStack +
+  seeded DynamoDB). The original GP-009d additionally tried to wrap one Lambda
+  handler in FastAPI/uvicorn so a live `curl http://localhost:8000/...` would
+  return real JSON during the demo. That was cut because:
+    - It required modifying src/python/transactionify/tools/aws/dynamodb/__init__.py
+      (production code change at module-import time — order-of-import hazard).
+    - It required CDK surgery on lib/transactionify-stack.ts (exclude lists on
+      every Code.fromAsset call) plus a sibling requirements-local.txt risk of
+      being bundled into the Lambda zip — cold-start regression vector.
+    - Lambda runtime is pinned to PYTHON_3_9; FastAPI adapter pulled extra
+      typing surface for marginal demo value.
+    - The live curl was the highest-flake surface in the demo (LocalStack +
+      uvicorn + boto3 endpoint switching all chained); cutting it removes
+      multiple attack vectors and saves ~half a day of fix-on-flake time.
+  The evolution path is one bullet in the ADR's Future Integrations section.
+
+  Why this ticket is now `delegate: pipeline` (was hybrid): with no production
+  code change there is no review surface that the author specifically must
+  inspect. The pipeline produces docker-compose + a seed script + a thin
+  Python wrapper for `dx local up/down`; standard review covers it.
+
+  Implementation hint for `dx local up`: shell out to `docker compose up -d`,
+  poll the LocalStack `/_localstack/health` endpoint until services are
+  reported as 'running' or timeout (30s), then run seed_dynamodb.py with the
+  env vars from .docker/.env.local.

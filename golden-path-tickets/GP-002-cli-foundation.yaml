@@ -1,0 +1,83 @@
+id: GP-002
+title: "CLI foundation — Typer + Rich + --json output shell"
+tier: A
+delegate: pipeline
+delegate_reason: "Boilerplate scaffold; well-documented stack (Typer/Rich); deterministic AC."
+review_mode: standard
+blast_radius: medium
+stretch: false
+
+depends_on:
+  - GP-000
+
+paths:
+  primary: packages/cli/src/dx/cli.py
+  secondary:
+    - packages/cli/pyproject.toml
+    - packages/cli/src/dx/__init__.py
+    - packages/cli/src/dx/__main__.py
+    - packages/cli/src/dx/output/__init__.py
+    - packages/cli/src/dx/output/human.py
+    - packages/cli/src/dx/output/machine.py
+    - packages/cli/src/dx/errors.py
+  test:
+    - packages/cli/tests/test_output.py
+    - packages/cli/tests/test_cli_help.py
+
+gherkin:
+  - scenario: "dx --help lists registered command groups"
+    given:
+      - "the CLI package is installed via uv tool install"
+    when:
+      - "the user runs `dx --help`"
+    then:
+      - "stdout lists at minimum: init, check, branch, pr, governance, local, dora (the actual command surface shipped in this PoC; pre-push hook installation is part of `dx init`, NOT a separate `dx hooks` command — earlier draft listed `hooks` as a top-level group; that group does not exist)"
+      - "exit code is 0"
+      - "output is rendered with Rich (boxes/panels)"
+
+  - scenario: "--json flag flips output to structured JSONL"
+    given:
+      - "any registered dx command supports --json"
+    when:
+      - "the user runs `dx --json <command>`"
+    then:
+      - "stdout is a single valid JSON object (parseable by jq)"
+      - "no Rich formatting characters appear in stdout"
+      - "schema includes: command, status (ok|error), duration_ms, payload"
+
+  - scenario: "Errors exit non-zero with structured payload"
+    given:
+      - "a command intentionally raises an UserFacingError"
+    when:
+      - "executed without --json"
+    then:
+      - "exit code is non-zero"
+      - "stderr shows a Rich panel with error message and a suggested fix"
+      - "with --json, stderr is suppressed and stdout JSON has status: error and payload.fix_hint"
+
+  - scenario: "dx --version returns a SemVer string"
+    given:
+      - "package version is set in pyproject.toml"
+    when:
+      - "user runs `dx --version`"
+    then:
+      - "stdout matches /\\d+\\.\\d+\\.\\d+/"
+      - "with --json, stdout is {\"version\": \"x.y.z\"}"
+
+out_of_scope:
+  - "Implementing init/check/branch/pr/governance/local/dora commands (separate tickets)"
+  - "Plugin/extension mechanism for third-party commands"
+  - "Telemetry collection (stats on command usage)"
+  - "Auto-update self-check"
+
+validation_commands:
+  - "uv tool install --editable packages/cli"
+  - "uv tool install --editable packages/cli  # install first so `dx` is on PATH"
+  - "dx --help | grep -qE 'init|check|branch|pr|governance|local|dora'  # invoke the installed binary directly; do NOT use `uv run dx` outside a project (uv looks for a venv in cwd)"
+  - "! dx --help | grep -qE '^\\s+hooks\\b'  # `dx hooks` is NOT a top-level command (pre-push hook is installed by `dx init`); fail loud if a future change accidentally adds it"
+  - "dx --version --json | jq -e '.version'"
+  - "uv run pytest packages/cli/tests/test_output.py -v"
+
+demo_signal: "uv tool install completes in <10s, dx --help renders cleanly; --json on the same command gives CI-parseable output. Convention over Configuration made tangible."
+
+notes: "Output dispatch (human vs machine) lives in packages/cli/src/dx/output/. All future commands inherit this dispatch by importing from there. Don't let later tickets reimplement output formatting."

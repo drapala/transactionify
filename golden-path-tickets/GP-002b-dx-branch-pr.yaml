@@ -1,0 +1,130 @@
+id: GP-002b
+title: "dx branch + dx pr — Work ID-enforcing wrappers (PDF: branch creation, PR submission)"
+tier: A
+delegate: pipeline
+delegate_reason: "Thin wrappers over git/gh; AC = correct shell invocations + reuse of CHECK_MANIFEST work_id regex (single source of truth)."
+review_mode: standard
+blast_radius: low
+stretch: false
+
+depends_on:
+  - GP-003   # CLI shell + init pattern + templates
+  - GP-004   # CHECK_MANIFEST.work_id — REGEX MUST be imported from here, not duplicated
+
+paths:
+  primary: packages/cli/src/dx/commands/branch.py
+  secondary:
+    - packages/cli/src/dx/commands/pr.py
+    - packages/cli/src/dx/git_helpers.py
+    - packages/cli/src/dx/clients/gh_api.py  # reused from GP-008
+  test:
+    - packages/cli/tests/test_branch.py
+    - packages/cli/tests/test_pr.py
+    - packages/cli/tests/test_workid_single_source.py
+
+gherkin:
+  - scenario: "dx branch creates a slug-formatted branch from work_id + title"
+    given:
+      - "the user is on the default branch (main) with a clean working tree"
+      - "CHECK_MANIFEST.work_id is the loaded regex (e.g. '^(LL|GP)-[0-9]+$')"
+    when:
+      - "the user runs `dx branch GP-123 'feat: add local env'`"
+    then:
+      - "a new branch named 'GP-123-feat-add-local-env' is created (lowercased, slug-safe)"
+      - "the user is now on the new branch"
+      - "with --json, stdout reports {branch_name, work_id, base, status: 'created'}"
+      - "exit code 0"
+
+  - scenario: "dx branch refuses an invalid work_id"
+    given:
+      - "the user runs `dx branch FOO-999 'feat: x'`"
+    when:
+      - "the work_id does not match the pattern from CHECK_MANIFEST"
+    then:
+      - "the command exits non-zero"
+      - "stderr explains: 'FOO-999 does not match pattern ...' with link to convention doc"
+      - "no branch is created (state preserved)"
+
+  - scenario: "dx pr opens a PR with title in the canonical work_id format and validates first"
+    given:
+      - "current branch is 'GP-123-feat-add-local-env' with at least one commit subject like 'GP-123: feat add local env'"
+      - "git remote origin configured to a GitHub repo"
+      - "GH_TOKEN present"
+    when:
+      - "the user runs `dx pr` (without --dry-run)"
+    then:
+      - "BEFORE any network call, dx check work_id runs locally (branch + commits) and passes — fail fast"
+      - "PR title format matches the same shape as commit subjects: `^<work_id>: .+$` (e.g. `GP-123: feat add local env`) — NO brackets, NO square-prefix; one mental model for branch (dash-joined), commits (colon-prefixed), and PR title (colon-prefixed)"
+      - "title is derived from the latest commit subject (or --title flag); if user-supplied title lacks the `<work_id>: ` prefix, dx pr prepends it"
+      - "the command shells out to `gh pr create` with the constructed title, body from .github/pull_request_template.md, base = main"
+      - "with --json, stdout reports {pr_number, pr_url, work_id, title}"
+      - "exit code 0"
+
+  - scenario: "Work ID format consistency across branch, commit, and PR title"
+    given:
+      - "CHECK_MANIFEST.work_id exposes both the work_id regex (e.g. '(LL|GP)-[0-9]+') AND the per-context full patterns: branch_pattern (dash-joined), subject_pattern (colon-prefixed)"
+    when:
+      - "test_workid_single_source.py runs"
+    then:
+      - "test asserts dx check work_id, dx branch, dx pr, and the GP-007 PR-title CI step ALL use subject_pattern from CHECK_MANIFEST for commit subjects and PR titles"
+      - "test asserts ALL use branch_pattern for branch names"
+      - "no module hardcodes brackets, square-prefixes, or any alternative formatting"
+
+  - scenario: "dx pr --dry-run does not call gh"
+    given:
+      - "any branch state"
+    when:
+      - "the user runs `dx pr --dry-run --json`"
+    then:
+      - "no network call to GitHub is made"
+      - "validation (branch + commits via dx check work_id) still runs"
+      - "stdout JSON reports the planned: {title, body_path, base, head, work_id, validation: 'passed' | 'failed'}"
+
+  - scenario: "Single source of truth: regex is imported from CHECK_MANIFEST, never duplicated (AST-based enforcement, not string grep)"
+    given:
+      - "test_workid_single_source.py uses Python's `ast` module to inspect branch.py and pr.py source"
+    when:
+      - "the test parses each module and walks the AST"
+    then:
+      - "the test asserts each module has an `ImportFrom` node where module='dx.checks.manifest' and one of the imported names is 'CHECK_MANIFEST' (or a per-key alias like 'work_id' coming from manifest)"
+      - "the test asserts NO `Constant` string node anywhere in branch.py / pr.py contains a literal regex matching `^\\^?\\(?(LL|GP)` or `[A-Z]+-\\[?0-9` (which would indicate the regex was inlined despite the import — string-grep tests are gameable via dynamic construction; AST parses the actual literals)"
+      - "the test additionally asserts no `re.compile(...)` call inside these modules has a string argument matching the work_id pattern (catches dynamic construction that hides the literal)"
+      - "if a future agent inlines or reconstructs the regex, this test fails with a message naming the file:line of the offending literal — string-based tests would pass under dynamic construction, AST does not"
+
+out_of_scope:
+  - "Squash/rebase orchestration (use git directly)"
+  - "Auto-merge / auto-delete branch (governance, not CLI ergonomics)"
+  - "Multi-remote handling (assume single origin)"
+  - "Re-implementing the regex anywhere — MUST import from CHECK_MANIFEST.work_id"
+  - "Interactive prompts beyond the title (keep it scriptable for CI/agents)"
+
+validation_commands:
+  - "uv run pytest packages/cli/tests/test_branch.py packages/cli/tests/test_pr.py packages/cli/tests/test_workid_single_source.py -v"
+  - "uv run dx branch --help | grep -q 'work_id'"
+  - "uv run dx pr --help | grep -q 'dry-run'"
+  - "cd packages/cli/tests/fixtures/branched-repo && uv run dx pr --dry-run --json | jq -e '.work_id'"
+
+demo_signal: "Two new live actions in Act 2: `dx branch GP-123 'feat: …'` and `dx pr`. Closes the PDF's literal 'branch creation, PR submission' deliverable. Convention enforcement happens at SUBMISSION, not just validation post-hoc — strongest argument for Convention-over-Configuration."
+
+notes: |
+  Why this depends on GP-004 (not just GP-002/GP-003): the work_id regex MUST be
+  imported from CHECK_MANIFEST, not duplicated. The pattern is: CHECK_MANIFEST is
+  THE contract; dx check, dx branch, dx pr, and the workflow generator (GP-007) all
+  read from it. The single-source-of-truth test (test_workid_single_source.py) is
+  the enforcement.
+
+  Format consistency (no brackets):
+    - Branch:        GP-123-feat-add-local-env       (dash-joined for filesystem safety)
+    - Commit subject: GP-123: feat add local env     (colon-prefixed)
+    - PR title:       GP-123: feat add local env     (same as commit subject)
+  One regex extracts the work_id; two full patterns (branch_pattern, subject_pattern)
+  cover the formatted contexts. NO brackets, NO `[GP-123]` square prefix anywhere.
+  This means the same mental model applies to all three artifacts — readers can grep
+  the work_id with one regex across history, branches, and PR titles.
+
+  Demo flow change owned by GP-010: Act 2 evolves from raw git/gh to dx branch + dx pr.
+  Total demo signal gain: 2 live commands + 1 stronger conceptual argument.
+
+  Implementation hint: `dx pr` reuses gh_api client from GP-008 (kept the auth surface
+  simple). gh_helpers wraps `git rev-parse --abbrev-ref HEAD`, `git log --format=%s`,
+  and `git remote get-url origin`.

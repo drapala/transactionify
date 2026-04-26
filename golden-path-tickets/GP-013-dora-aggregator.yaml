@@ -1,0 +1,148 @@
+id: GP-013
+title: "DORA aggregator — `dx dora summarize` computes the 4 PDF metrics from raw events"
+tier: A
+delegate: pipeline
+delegate_reason: "Self-contained: input is JSONL artifact validated against GP-001 schema; output is 4 numbers + JSON. AC = correctness against fixture event sets."
+review_mode: pre_pr_review
+blast_radius: low
+stretch: false
+
+depends_on:
+  - GP-001   # raw-event schema is the input contract
+  - GP-002   # CLI shell
+
+paths:
+  primary: packages/cli/src/dx/commands/dora.py
+  secondary:
+    - packages/cli/src/dx/dora/__init__.py
+    - packages/cli/src/dx/dora/aggregate.py       # the 4 metrics + MTTR computation
+    - packages/cli/src/dx/dora/load.py            # JSONL loader + GP-001 schema validation
+    - packages/cli/tests/fixtures/dora-events/single-success.jsonl                # one pipeline_run + one successful deployment with commit_authored_at
+    - packages/cli/tests/fixtures/dora-events/mixed-failure-recovery.jsonl         # one failed deployment + one recovery deployment with is_rework=true and recovered_from_failure_id pointing at the prior failure
+    - packages/cli/tests/fixtures/dora-events/empty.jsonl
+    - packages/cli/tests/fixtures/dora-events/missing-commit-authored-at.jsonl     # deployment event missing the field — must be rejected by GP-001 schema before aggregation
+    - docs/DORA.md                                # how the 4 metrics are computed; consumer-facing
+  test:
+    - packages/cli/tests/test_dora_aggregate.py
+    - packages/cli/tests/test_dora_command.py
+
+gherkin:
+  - scenario: "`dx dora summarize` computes the 4 PDF-mandated metrics from a JSONL of raw events"
+    given:
+      - "a JSONL file at /tmp/events.jsonl where every line validates against packages/shared-schemas/dora-event.schema.json (GP-001)"
+      - "the file contains events of types from GP-001's v1 enum: pipeline_run, deployment (incident_* event types are NOT in v1 — see GP-001)"
+      - "deployment events carry commit_authored_at (required by GP-001 conditional); rework deployments carry is_rework: true and recovered_from_failure_id pointing at a prior failure event's identifier"
+    when:
+      - "the user runs `dx dora summarize --events /tmp/events.jsonl --window 7d --json`"
+    then:
+      - "stdout JSON has exactly these top-level keys: deployment_frequency, lead_time_for_changes_seconds, change_failure_rate, mean_time_to_restore_seconds, window, total_events_seen, total_events_used, schema_version"
+      - "deployment_frequency = count(deployment events with outcome: success in window) / window_days"
+      - "lead_time_for_changes_seconds = median(deployment.finished_at - deployment.commit_authored_at) across successful deployments in window — uses the commit_authored_at field that GP-001's schema makes required on deployment events; no commit_sha join required"
+      - "change_failure_rate = count(deployment events with outcome: failure) / count(all deployment events) in window (0.0 if no deployments)"
+      - "mean_time_to_restore_seconds = mean(rework_deploy.finished_at - referenced_failure.started_at) over deployment events with is_rework: true and recovered_from_failure_id resolving to a prior failed deployment whose identifier matches; null if no rework pairs in the window"
+      - "exit code 0"
+
+  - scenario: "Aggregator rejects events that don't validate against GP-001 schema (fail-loud)"
+    given:
+      - "a JSONL file with one line missing the required `actor` field, OR a deployment event missing commit_authored_at, OR an event with event_type: incident_opened (not in v1 enum)"
+    when:
+      - "the user runs `dx dora summarize --events /tmp/bad.jsonl`"
+    then:
+      - "exit code is non-zero"
+      - "stderr names the line number AND the missing/invalid field (or the unknown enum value)"
+      - "no partial summary is emitted (atomic — events are validated before any metric is computed)"
+
+  - scenario: "Aggregator handles empty input cleanly (no deploys, no incidents)"
+    given:
+      - "an empty JSONL file"
+    when:
+      - "the user runs `dx dora summarize --events /tmp/empty.jsonl --json`"
+    then:
+      - "stdout JSON has all four metric keys present with explicit zero/null values: deployment_frequency: 0, change_failure_rate: 0.0, lead_time_for_changes_seconds: null, mean_time_to_restore_seconds: null"
+      - "total_events_seen: 0, total_events_used: 0"
+      - "exit code 0"
+
+  - scenario: "Human-readable output renders the 4 metrics as a table"
+    given:
+      - "a non-empty JSONL fixture"
+    when:
+      - "the user runs `dx dora summarize --events /tmp/events.jsonl` (no --json)"
+    then:
+      - "stdout shows a Rich-rendered table with 4 rows (one per metric) + a row for window + total events"
+      - "missing metrics (e.g. MTTR with no recovered incidents) render as 'n/a' not '0' (zero would lie)"
+
+  - scenario: "Demo path: aggregator reads the artifact emitted by GP-007's dora-emit step"
+    given:
+      - "the fork has run the PR pipeline; the GP-007 dora-emit step uploaded `dora-events` artifact (JSONL)"
+      - "the artifact is downloaded locally to /tmp/dora-events.jsonl"
+    when:
+      - "the user runs `dx dora summarize --events /tmp/dora-events.jsonl`"
+    then:
+      - "the same code path that reads fixtures reads the real artifact (no special CI mode)"
+      - "this is the demo's closing beat: 4 numbers printed in the terminal, sourced from real CI events"
+
+out_of_scope:
+  - "Per-team dashboards / web UI / Grafana integration"
+  - "Time-series storage (the JSONL artifact IS the storage for the PoC)"
+  - "Trend analysis / week-over-week deltas"
+  - "Aggregating from multiple repos at once (single artifact in, single summary out)"
+  - "Computing rework rate as a 5th DORA metric (rework is supplementary; this ticket does not promote it)"
+  - "Backfilling missing events (garbage in, error out — see schema-rejection scenario)"
+
+validation_commands:
+  - "uv run pytest packages/cli/tests/test_dora_aggregate.py packages/cli/tests/test_dora_command.py -v"
+  - "uv run dx dora summarize --events packages/cli/tests/fixtures/dora-events/single-success.jsonl --json | jq -e '.deployment_frequency >= 0'"
+  - "uv run dx dora summarize --events packages/cli/tests/fixtures/dora-events/mixed-failure-recovery.jsonl --json | jq -e '.change_failure_rate > 0 and .mean_time_to_restore_seconds != null'"
+  - "uv run dx dora summarize --events packages/cli/tests/fixtures/dora-events/missing-commit-authored-at.jsonl --json; test $? -ne 0  # GP-001 conditional rejects deployment events missing commit_authored_at"
+  - "uv run dx dora summarize --events packages/cli/tests/fixtures/dora-events/empty.jsonl --json | jq -e '.total_events_used == 0 and .deployment_frequency == 0'"
+  - "uv run dx dora summarize --help | grep -qE 'window|--events'"
+  - "test -f docs/DORA.md && grep -qF 'Deployment Frequency' docs/DORA.md && grep -qF 'Mean Time to Restore' docs/DORA.md"
+  # PDF coverage — the 4 named metrics must each appear in the summarize output schema
+  - "uv run dx dora summarize --events packages/cli/tests/fixtures/dora-events/single-success.jsonl --json | jq -e 'has(\"deployment_frequency\") and has(\"lead_time_for_changes_seconds\") and has(\"change_failure_rate\") and has(\"mean_time_to_restore_seconds\")'"
+
+demo_signal: "Closing beat of the live demo: after the PR pipeline runs and uploads `dora-events`, the author downloads the artifact and runs `dx dora summarize` — the terminal prints 4 numbers, each labeled with the PDF's exact metric name. This converts the otherwise abstract 'raw events' argument into 4 concrete numbers in front of the CTO. Without this ticket, the deliverable answer to PDF p.3 'Core Metrics: standardized capture of...' is 'capture yes, computation downstream' — partial credit. With it, the answer is whole."
+
+notes: |
+  Why a new ticket and not folded into GP-001 or GP-007:
+    - GP-001 owns the schema (the contract). Putting aggregation there leaks
+      consumer logic into the schema package.
+    - GP-007 owns the workflow generator. Putting aggregation there couples
+      a CLI consumer to a TS framework — wrong dependency direction.
+    - The aggregator is a CLI consumer of the schema; it lives in packages/cli
+      next to other dx commands. Same shape as `dx check`.
+
+  Implementation outline (~80 lines):
+    - load.py: stream-parse JSONL line-by-line; validate each event against
+      the GP-001 JSON schema (use jsonschema lib already in dev deps);
+      collect per type into 2 lists (deployments, pipeline_runs). Build a
+      lookup index of deployment events by their event_id (UUIDv7,
+      schema-required per GP-001) so MTTR's recovered_from_failure_id
+      resolution is O(1) by direct dict lookup — no commit_sha+started_at
+      heuristic, no fallback resolution.
+    - aggregate.py: pure functions, one per metric. Each takes the relevant
+      list + window_days and returns a number or null. No I/O.
+    - dora.py command: orchestrate load + aggregate + render (Rich table for
+      human, dict→json for --json). Reuses the output dispatch from GP-002.
+
+  Boundary calls:
+    - Lead Time for Changes: reads commit_authored_at directly off each
+      successful deployment event (GP-001 makes the field required on
+      deployment events via the conditional). No git log join, no commit_sha
+      grouping required.
+    - MTTR: for each deployment event with is_rework: true, look up the prior
+      deployment in the index by recovered_from_failure_id (which is an
+      event_id UUIDv7, validated by schema format). If the lookup misses
+      (failure event is older than the loaded window, or the id was never
+      emitted), that recovery does not contribute. If there is at least one
+      resolved pair in the window, MTTR is the mean across pairs;
+      otherwise null. No incident_* events involved, no commit_sha
+      heuristics.
+
+  This ticket also unblocks PDF evaluation criterion #1: "Are DORA metrics
+  truly comparable between a Python team and a Go team?" Answer becomes:
+  yes — both teams emit the same raw events (GP-001 schema) and the same
+  aggregator computes the same 4 numbers regardless of stack.
+
+  Critical-path note: GP-013 only depends on GP-001 + GP-002. It can run in
+  parallel with the framework track (GP-005 → GP-006 → GP-007). It feeds
+  the demo closing and the ADR's "comparable telemetry" claim.

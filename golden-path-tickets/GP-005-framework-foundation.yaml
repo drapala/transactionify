@@ -1,0 +1,82 @@
+id: GP-005
+title: "Framework foundation — TS package, types from schemas, base renderer"
+tier: A
+delegate: pipeline
+delegate_reason: "Boilerplate TS scaffold; codegen pattern is mechanical."
+review_mode: standard
+blast_radius: medium
+stretch: false
+
+depends_on:
+  - GP-000
+  - GP-001
+
+paths:
+  primary: packages/framework/src/index.ts
+  secondary:
+    - packages/framework/package.json
+    - packages/framework/tsconfig.json
+    - packages/framework/src/types/dx-config.ts
+    - packages/framework/src/types/dora-event.ts
+    - packages/framework/src/workflows/renderer.ts
+    - packages/framework/scripts/codegen-types.ts
+  test:
+    - packages/framework/test/renderer.test.ts
+    - packages/framework/test/types-match-schema.test.ts
+
+gherkin:
+  - scenario: "Framework package builds successfully"
+    given:
+      - "pnpm workspace is initialized"
+      - "framework's package.json declares @golden-path/framework"
+    when:
+      - "pnpm --filter @golden-path/framework build runs"
+    then:
+      - "no TypeScript errors"
+      - "dist/ is produced with index.d.ts and index.js"
+
+  - scenario: "TypeScript types are generated from shared schemas"
+    given:
+      - "packages/shared-schemas/{dora-event,dx-config}.schema.json exist"
+    when:
+      - "pnpm --filter @golden-path/framework codegen runs"
+    then:
+      - "src/types/dora-event.ts contains exported interface DoraEvent that mirrors the RAW-EVENT shape from GP-001's dora-event.schema.json (event_type, service, repository, commit_sha, actor, work_id, change_summary, outcome, started_at, finished_at, optional is_rework / failure_id / recovered_from_failure_id) — explicitly NOT a 5-aggregated-metrics interface; aggregation is downstream per GP-001's design"
+      - "src/types/dx-config.ts contains exported interface DxConfig"
+      - "regenerating produces no diff (idempotent)"
+
+  - scenario: "Schema drift triggers test failure"
+    given:
+      - "types/dora-event.ts is out of sync with the schema"
+    when:
+      - "test/types-match-schema.test.ts runs"
+    then:
+      - "test fails, reporting which fields diverged"
+      - "instructs developer to run pnpm codegen"
+
+  - scenario: "Base workflow renderer emits valid GitHub Actions YAML"
+    given:
+      - "renderer accepts a structured plan object: {name, on, jobs: [{id, runs_on, steps: [...]}]}"
+    when:
+      - "render() is called with a minimal valid plan"
+    then:
+      - "output is YAML parseable by js-yaml"
+      - "output is accepted by actionlint (if available locally)"
+      - "step ordering is preserved"
+
+out_of_scope:
+  - "RuntimeAdapter (GP-006)"
+  - "PR pipeline contents — this is the renderer only (GP-007 owns pipeline)"
+  - "CDK constructs"
+  - "Workflow dispatch / cron / matrix configurations"
+
+validation_commands:
+  - "pnpm --filter @golden-path/framework install"
+  - "pnpm --filter @golden-path/framework codegen"
+  - "pnpm --filter @golden-path/framework build"
+  - "pnpm --filter @golden-path/framework test"
+  - "git diff --exit-code packages/framework/src/types/  # codegen idempotent"
+
+demo_signal: "Types generated from schema = single source of truth. CTO sees DxConfig as a TS type and trusts the contract."
+
+notes: "Use json-schema-to-typescript or quicktype for codegen. Pre-publish hook ensures types regenerate before any package release."
