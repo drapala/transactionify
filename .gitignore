@@ -37,3 +37,6 @@ node_modules/
 # OS
 .DS_Store
 Thumbs.db
+
+# Candidate private scratchpad (see CLAUDE.md memory + Obsidian vault for narrative source)
+docs/superpowers/
