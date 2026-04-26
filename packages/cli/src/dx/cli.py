@@ -51,8 +51,8 @@ from dx.commands.pr import pr_command  # noqa: E402
 # + positional callback args makes Typer's help advertise an extra COMMAND slot
 # and the runner mis-parses the args as missing.
 from dx.commands.dora import dora_app  # noqa: E402
+from dx.commands.governance import governance_app  # noqa: E402
 
-governance_app = typer.Typer(help="Apply the platform GitHub ruleset (GP-008).")
 local_app = typer.Typer(help="LocalStack + seeded DynamoDB lifecycle (GP-009d).")
 
 app.add_typer(init_app, name="init")
@@ -70,11 +70,6 @@ def _stub(group: str) -> None:
         fix_hint=f"See .kiro/specs/golden-path/tasks.md — the ticket implementing `{group}` is the one to dispatch next.",
         exit_code=2,
     )
-
-
-@governance_app.callback(invoke_without_command=True)
-def governance_root() -> None:
-    _stub("governance")
 
 
 @local_app.callback(invoke_without_command=True)
