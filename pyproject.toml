@@ -1,0 +1,15 @@
+[project]
+name = "transactionify-workspace"
+version = "0.0.0"
+description = "Golden Path PoC — uv workspace root (no runtime code; member packages live in packages/*)"
+requires-python = ">=3.11"
+
+[tool.uv.workspace]
+members = ["packages/cli"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.4.0",
+    "pytest>=8.0",
+    "jsonschema>=4.21",
+]
