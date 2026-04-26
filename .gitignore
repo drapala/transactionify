@@ -42,5 +42,9 @@ Thumbs.db
 dist/
 *.tsbuildinfo
 
+# Test fixtures that bootstrap their own .git dynamically
+packages/cli/tests/fixtures/branched-repo/.git/
+packages/cli/tests/fixtures/branched-repo/a.txt
+
 # Candidate private scratchpad (see CLAUDE.md memory + Obsidian vault for narrative source)
 docs/superpowers/

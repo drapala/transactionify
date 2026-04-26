@@ -102,7 +102,10 @@ validation_commands:
   - "uv run pytest packages/cli/tests/test_branch.py packages/cli/tests/test_pr.py packages/cli/tests/test_workid_single_source.py -v"
   - "uv run dx branch --help | grep -q 'work_id'"
   - "uv run dx pr --help | grep -q 'dry-run'"
-  - "cd packages/cli/tests/fixtures/branched-repo && uv run dx pr --dry-run --json | jq -e '.work_id'"
+  # The fixture's .git/ is NOT tracked (would conflict with parent repo). bootstrap.sh
+  # materialises a clean git state idempotently — `dx pr --dry-run` then has a real
+  # branch + commit history to introspect.
+  - "bash packages/cli/tests/fixtures/branched-repo/bootstrap.sh && (cd packages/cli/tests/fixtures/branched-repo && uv run dx pr --dry-run --json | jq -e '.work_id')"
 
 demo_signal: "Two new live actions in Act 2: `dx branch GP-123 'feat: …'` and `dx pr`. Closes the PDF's literal 'branch creation, PR submission' deliverable. Convention enforcement happens at SUBMISSION, not just validation post-hoc — strongest argument for Convention-over-Configuration."
 

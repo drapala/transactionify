@@ -43,16 +43,21 @@ from dx.commands import check as _check_module  # noqa: E402
 
 check_app = typer.Typer(help="Run lint, unit, PBT, contract, work_id checks (GP-004).")
 _check_module.register(check_app)
-branch_app = typer.Typer(help="Create a Work-ID-conformant branch (GP-002b).")
-pr_app = typer.Typer(help="Submit PR; validates branch + commits + title locally first (GP-002b).")
+from dx.commands.branch import branch_command  # noqa: E402
+from dx.commands.pr import pr_command  # noqa: E402
+
+# branch and pr are registered as top-level commands (not sub-Typers) because
+# they accept positional arguments. A sub-Typer with invoke_without_command=True
+# + positional callback args makes Typer's help advertise an extra COMMAND slot
+# and the runner mis-parses the args as missing.
 governance_app = typer.Typer(help="Apply the platform GitHub ruleset (GP-008).")
 local_app = typer.Typer(help="LocalStack + seeded DynamoDB lifecycle (GP-009d).")
 dora_app = typer.Typer(help="DORA aggregator: 4 PDF metrics from raw events (GP-013).")
 
 app.add_typer(init_app, name="init")
 app.add_typer(check_app, name="check")
-app.add_typer(branch_app, name="branch")
-app.add_typer(pr_app, name="pr")
+app.command(name="branch", help="Create a Work-ID-conformant branch (GP-002b).")(branch_command)
+app.command(name="pr", help="Submit PR; validates branch + commits + title locally first (GP-002b).")(pr_command)
 app.add_typer(governance_app, name="governance")
 app.add_typer(local_app, name="local")
 app.add_typer(dora_app, name="dora")
@@ -64,16 +69,6 @@ def _stub(group: str) -> None:
         fix_hint=f"See .kiro/specs/golden-path/tasks.md — the ticket implementing `{group}` is the one to dispatch next.",
         exit_code=2,
     )
-
-
-@branch_app.callback(invoke_without_command=True)
-def branch_root() -> None:
-    _stub("branch")
-
-
-@pr_app.callback(invoke_without_command=True)
-def pr_root() -> None:
-    _stub("pr")
 
 
 @governance_app.callback(invoke_without_command=True)
