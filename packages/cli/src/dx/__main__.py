@@ -1,10 +1,11 @@
-"""Stub entrypoint for the dx CLI. Real Typer + Rich surface lands in GP-002."""
+"""Entry point for `python -m dx`."""
+
+from dx.cli import app
 
 
-def main() -> int:
-    print("dx scaffold — real CLI surface lands in GP-002")
-    return 0
+def main() -> None:
+    app()
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

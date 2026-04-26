@@ -1,12 +1,17 @@
 [project]
 name = "dx"
-version = "0.0.1"
-description = "dx — developer-facing CLI for the Golden Path platform (scaffold; real surface lands in GP-002)"
+version = "0.1.0"
+description = "dx — developer-facing CLI for the Golden Path platform (Typer + Rich; --json on every command)"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "typer>=0.12",
+    "rich>=13.7",
+    "pyyaml>=6.0",
+    "jsonschema>=4.21",
+]
 
 [project.scripts]
-dx = "dx.__main__:main"
+dx = "dx.cli:app"
 
 [build-system]
 requires = ["hatchling"]
