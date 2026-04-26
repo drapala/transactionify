@@ -1,0 +1,22 @@
+# LocalStack-only compose stack. Service-dependency emulation for tests
+# 'without cloud latency' (PDF p.4 §3.a). Live HTTP path is OUT OF SCOPE
+# for the PoC — see docs/LOCAL-ENV.md and the ADR Future Integrations.
+services:
+  localstack:
+    image: localstack/localstack:3.7
+    container_name: transactionify-localstack
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=dynamodb
+      - DEFAULT_REGION=us-east-1
+      - PERSISTENCE=0
+      - DEBUG=0
+    volumes:
+      - ./.docker/localstack-init.sh:/etc/localstack/init/ready.d/init.sh:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4566/_localstack/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s

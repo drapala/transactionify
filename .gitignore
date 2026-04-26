@@ -48,3 +48,4 @@ packages/cli/tests/fixtures/branched-repo/a.txt
 
 # Candidate private scratchpad (see CLAUDE.md memory + Obsidian vault for narrative source)
 docs/superpowers/
+.docker/.env.local

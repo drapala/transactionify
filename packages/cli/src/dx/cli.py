@@ -52,8 +52,7 @@ from dx.commands.pr import pr_command  # noqa: E402
 # and the runner mis-parses the args as missing.
 from dx.commands.dora import dora_app  # noqa: E402
 from dx.commands.governance import governance_app  # noqa: E402
-
-local_app = typer.Typer(help="LocalStack + seeded DynamoDB lifecycle (GP-009d).")
+from dx.commands.local import local_app  # noqa: E402
 
 app.add_typer(init_app, name="init")
 app.add_typer(check_app, name="check")
@@ -70,11 +69,6 @@ def _stub(group: str) -> None:
         fix_hint=f"See .kiro/specs/golden-path/tasks.md — the ticket implementing `{group}` is the one to dispatch next.",
         exit_code=2,
     )
-
-
-@local_app.callback(invoke_without_command=True)
-def local_root() -> None:
-    _stub("local")
 
 
 @app.callback(invoke_without_command=True)
