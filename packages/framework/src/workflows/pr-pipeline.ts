@@ -39,7 +39,7 @@ const SETUP_UV = { name: "install uv", run: "pipx install uv" };
 // `uv tool install ruff` for a global isolated copy.
 const INSTALL_PY_TOOLING = {
   name: "install python dev tooling to system",
-  run: "uv pip install --system ruff pytest pytest-mock pytest-cov hypothesis jsonschema pyyaml typer rich jinja2 schemathesis",
+  run: "uv pip install --system ruff pytest pytest-mock pytest-cov hypothesis jsonschema pyyaml typer rich jinja2 openapi-spec-validator",
 };
 
 // Install fork-side test deps too (boto3 stubs, moto, etc) so unit-tests

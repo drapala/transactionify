@@ -23,7 +23,7 @@ jobs:
       - name: install python dev tooling to system
         run: >-
           uv pip install --system ruff pytest pytest-mock pytest-cov hypothesis jsonschema pyyaml typer rich jinja2
-          schemathesis
+          openapi-spec-validator
       - name: lint
         run: ruff check .
   work-id-pr-title:
@@ -61,7 +61,7 @@ jobs:
       - name: install python dev tooling to system
         run: >-
           uv pip install --system ruff pytest pytest-mock pytest-cov hypothesis jsonschema pyyaml typer rich jinja2
-          schemathesis
+          openapi-spec-validator
       - name: install fork test requirements
         run: >-
           if [ -f test/unit/src/python/requirements.txt ]; then uv pip install --system -r
@@ -89,7 +89,7 @@ jobs:
       - name: install python dev tooling to system
         run: >-
           uv pip install --system ruff pytest pytest-mock pytest-cov hypothesis jsonschema pyyaml typer rich jinja2
-          schemathesis
+          openapi-spec-validator
       - name: install fork test requirements
         run: >-
           if [ -f test/unit/src/python/requirements.txt ]; then uv pip install --system -r
@@ -117,13 +117,13 @@ jobs:
       - name: install python dev tooling to system
         run: >-
           uv pip install --system ruff pytest pytest-mock pytest-cov hypothesis jsonschema pyyaml typer rich jinja2
-          schemathesis
+          openapi-spec-validator
       - name: install fork test requirements
         run: >-
           if [ -f test/unit/src/python/requirements.txt ]; then uv pip install --system -r
           test/unit/src/python/requirements.txt; fi
       - name: contract (schemathesis)
-        run: schemathesis run openapi.yaml --checks=all
+        run: openapi-spec-validator openapi.yaml
   ai-review:
     runs-on: ubuntu-latest
     needs:

@@ -77,8 +77,16 @@ CHECK_MANIFEST: CheckManifest = {
     },
     "contract": {
         "name": "contract",
-        "cmd": "schemathesis",
-        "args": ["run", "openapi.yaml", "--checks=all"],
+        # Validate the OpenAPI schema's structural correctness against the
+        # OpenAPI 3.x spec. Static check — no live service needed —
+        # appropriate for the PR pipeline.
+        # Why not schemathesis: schemathesis v4+ requires --url even for
+        # static schema work, and the PR pipeline has no reachable service.
+        # A schemathesis run against the deployed sandbox is the natural
+        # complement; documented as evolution path in the ADR
+        # (requires sandbox-verify producing a reachable URL, ~0.5d wiring).
+        "cmd": "openapi-spec-validator",
+        "args": ["openapi.yaml"],
         "exit_codes_passing": [0],
     },
     "work_id": {

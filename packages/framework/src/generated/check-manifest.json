@@ -1,11 +1,9 @@
 {
   "contract": {
     "args": [
-      "run",
-      "openapi.yaml",
-      "--checks=all"
+      "openapi.yaml"
     ],
-    "cmd": "schemathesis",
+    "cmd": "openapi-spec-validator",
     "exit_codes_passing": [
       0
     ],
