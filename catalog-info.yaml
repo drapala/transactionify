@@ -1,0 +1,106 @@
+# Backstage service catalog entry for Transactionify (under the Golden Path platform)
+# Spec: https://backstage.io/docs/features/software-catalog/descriptor-format
+#
+# This is a STUB shipped as a connector — full Backstage integration is
+# Future Integration #1 in ADR-0001 (catalog/portal layer for 10+ teams).
+# A working Backstage instance reading this file would surface:
+#   - the Transactionify service with lifecycle: experimental
+#   - links to the OpenAPI spec, the platform's CLI/Framework packages,
+#     and the local-dev runbook
+#   - ownership pointing to the platform team (placeholder: @drapala)
+
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: transactionify
+  description: |
+    Reference microservice for the Golden Path PoC. Lambda Python on
+    AWS API Gateway + DynamoDB. Used as the Integration Case Study
+    target for the platform CLI (`@dx`) and Framework
+    (`@golden-path/framework`).
+  annotations:
+    github.com/project-slug: drapala/transactionify
+    backstage.io/techdocs-ref: dir:.
+    backstage.io/source-location: url:https://github.com/drapala/transactionify
+  tags:
+    - python
+    - aws-lambda
+    - cdk
+    - api-gateway
+    - dynamodb
+    - golden-path
+    - inner-source
+  links:
+    - url: ./openapi.yaml
+      title: OpenAPI 3.0 spec
+      icon: docs
+    - url: ./.kiro/steering/golden-path.md
+      title: Agent steering (Golden Path conventions)
+      icon: docs
+    - url: ./docs/LOCAL-ENV.md
+      title: Local environment setup (LocalStack)
+      icon: docs
+    - url: ./golden-path-tickets/README.md
+      title: Backlog
+      icon: scaffolder
+spec:
+  type: service
+  lifecycle: experimental
+  owner: group:platform
+  system: golden-path
+  providesApis:
+    - transactionify-rest
+  consumesApis: []
+  dependsOn:
+    - resource:dynamodb-transactionify-table
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: transactionify-rest
+  description: |
+    REST API exposing 4 endpoints — POST /api/v1/accounts,
+    POST /accounts/{id}/payments, GET /accounts/{id}/balance,
+    GET /accounts/{id}/transactions. Authenticated via APIKey header.
+  links:
+    - url: ./openapi.yaml
+      title: OpenAPI 3.0 spec
+      icon: docs
+    - url: ./docs/api/transactionify.bru
+      title: Bruno collection
+      icon: scaffolder
+spec:
+  type: openapi
+  lifecycle: experimental
+  owner: group:platform
+  system: golden-path
+  definition:
+    $text: ./openapi.yaml
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: golden-path
+  description: |
+    The Golden Path DevEx platform — shared CLI + Framework providing
+    homologated Git conventions, CI/CD shape, and DORA telemetry across
+    10+ engineering teams. PoC evidences are in this fork; production
+    form would have packages/* released independently via SemVer.
+  tags:
+    - inner-source
+    - devex-platform
+    - dora
+spec:
+  owner: group:platform
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: platform
+  description: Platform engineering team (PoC: solo author; multi-engineer per ADR-0001 Consequence (a))
+spec:
+  type: team
+  parent: organization
+  children: []
+  members:
+    - drapala
