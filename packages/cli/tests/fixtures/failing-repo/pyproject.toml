@@ -1,0 +1,15 @@
+# Fixture-local ruff config.
+# The fixture is INTENTIONALLY a ruff-violating module — test_check.py asserts
+# `dx check` exits non-zero when run from inside this directory. The repo-root
+# pyproject.toml excludes this path globally so the platform's own pre-push
+# hook doesn't trip over it (the fixture is meant to fail in tests, not on
+# the candidate's dev push). This local config selects E + F WITHOUT the
+# extend-exclude, so the fixture-local `dx check lint` actually exercises
+# the rules.
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F"]
+# Note: F811 (the canary the fixture relies on) is NOT in any ignore list.

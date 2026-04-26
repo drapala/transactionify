@@ -154,7 +154,7 @@ validation_commands:
   # F13 â€” scoped grep: assert continue-on-error: true is on ai-review specifically, NOT anywhere in the file
   - "if command -v yq; then test \"$(yq '.jobs.\"ai-review\".\"continue-on-error\"' packages/framework/test/fixtures/expected-pr-pipeline.yml)\" = 'true'; else awk '/^  ai-review:/,/^  [a-zA-Z]/' packages/framework/test/fixtures/expected-pr-pipeline.yml | grep -q 'continue-on-error: true'; fi  # scoped to ai-review block; bare grep (which passes if any step has the flag) is NOT acceptable"
   - "if command -v yq; then test \"$(yq '.jobs.lint.\"continue-on-error\" // \"false\"' packages/framework/test/fixtures/expected-pr-pipeline.yml)\" != 'true' && test \"$(yq '.jobs.\"unit-tests\".\"continue-on-error\" // \"false\"' packages/framework/test/fixtures/expected-pr-pipeline.yml)\" != 'true' && test \"$(yq '.jobs.contract.\"continue-on-error\" // \"false\"' packages/framework/test/fixtures/expected-pr-pipeline.yml)\" != 'true' && test \"$(yq '.jobs.\"sandbox-verify\".\"continue-on-error\" // \"false\"' packages/framework/test/fixtures/expected-pr-pipeline.yml)\" != 'true'; else echo 'yq not installed; manual review required'; fi  # blocking jobs MUST NOT have continue-on-error (P1-12 â€” was 'deploy-sandbox' in earlier draft; canonical name is 'sandbox-verify' because the PoC step is synth-only, not a real deploy)"
-  # €” AWS_DEFAULT_REGION must be set at job level on every job that imports the fork's Python service code (boto3 module-level singleton in tools/aws/dynamodb/__init__.py:9 raises NoRegionError without it)
+  # ï¿½ï¿½ AWS_DEFAULT_REGION must be set at job level on every job that imports the fork's Python service code (boto3 module-level singleton in tools/aws/dynamodb/__init__.py:9 raises NoRegionError without it)
   - "if command -v yq; then test \"$(yq '.jobs.\"unit-tests\".env.AWS_DEFAULT_REGION' packages/framework/test/fixtures/expected-pr-pipeline.yml)\" = 'us-east-1' && test \"$(yq '.jobs.pbt.env.AWS_DEFAULT_REGION' packages/framework/test/fixtures/expected-pr-pipeline.yml)\" = 'us-east-1' && test \"$(yq '.jobs.contract.env.AWS_DEFAULT_REGION' packages/framework/test/fixtures/expected-pr-pipeline.yml)\" = 'us-east-1'; else awk '/^  unit-tests:/,/^  [a-zA-Z]/' packages/framework/test/fixtures/expected-pr-pipeline.yml | grep -q 'AWS_DEFAULT_REGION: us-east-1'; fi  # boto3 module-level resource() raises NoRegionError without the env"
   - "grep -q 'gh pr comment' packages/framework/test/fixtures/expected-pr-pipeline.yml  # Q triggered via comment, not action"
   - "! grep -q 'amazon-q-developer/' packages/framework/test/fixtures/expected-pr-pipeline.yml  # no fictional action ref"
@@ -173,13 +173,32 @@ validation_commands:
     fi
   # ai-review gated on AMAZON_Q_REVIEW_ENABLED variable (not just App installation â€” the variable is the consumer's explicit opt-in)
   - "grep -qE 'AMAZON_Q_REVIEW_ENABLED' packages/framework/test/fixtures/expected-pr-pipeline.yml  # gating variable referenced"
-  # €” gated by BOTH (conjunction), not OR (alternation); use yq for structured assertion
+  # ï¿½ï¿½ gated by BOTH (conjunction), not OR (alternation); use yq for structured assertion
   - "if command -v yq; then test \"$(yq '.jobs.\"sandbox-verify\".needs | contains([\"work-id-pr-title\"]) and contains([\"cdk-synth\"])' packages/framework/test/fixtures/expected-pr-pipeline.yml)\" = 'true'; else awk '/^  sandbox-verify:/,/^  [a-zA-Z]/' packages/framework/test/fixtures/expected-pr-pipeline.yml | grep -q 'work-id-pr-title' && awk '/^  sandbox-verify:/,/^  [a-zA-Z]/' packages/framework/test/fixtures/expected-pr-pipeline.yml | grep -q 'cdk-synth'; fi  # both must be present"
   - "grep -qE '^\\s*sandbox-verify:' packages/framework/test/fixtures/expected-pr-pipeline.yml  # synth-only sandbox verification job (not a real cdk deploy)"
   - "! grep -qE 'aws-actions/configure-aws-credentials' packages/framework/test/fixtures/expected-pr-pipeline.yml  # PR pipeline does NOT configure AWS creds at PoC fidelity (synth-only)"
   # P0-1 AWS_DEFAULT_REGION on jobs that import production code that touches boto3
   - "grep -qE 'AWS_DEFAULT_REGION:\\s*us-east-1' packages/framework/test/fixtures/expected-pr-pipeline.yml  # boto3 module-import singleton requires region; fork's tools/aws/dynamodb/__init__.py creates resource at import time"
-  - "for job in unit-tests pbt contract cdk-synth sandbox-verify; do awk \"/^  ${job}:/,/^  [a-zA-Z]/\" packages/framework/test/fixtures/expected-pr-pipeline.yml | grep -qE 'AWS_DEFAULT_REGION' || { echo \"ERROR: ${job} job missing AWS_DEFAULT_REGION env\"; exit 1; }; done"
+  # P0-1 (per-job assertion). Earlier draft used awk range `/^  ${job}:/,/^  [a-zA-Z]/`
+  # which is broken: awk's range start regex also matches the end regex on the same line
+  # (the start line `  unit-tests:` matches `^  [a-zA-Z]`), so the range captures only that
+  # one line. Replaced with yq structured access (preferred) + flag-based awk fallback that
+  # opens the block on the start line and closes on the NEXT job's leading key.
+  - |
+    for job in unit-tests pbt contract cdk-synth sandbox-verify; do
+      if command -v yq >/dev/null; then
+        test "$(yq ".jobs.\"${job}\".env.AWS_DEFAULT_REGION" packages/framework/test/fixtures/expected-pr-pipeline.yml)" = "us-east-1" \
+          || { echo "ERROR: ${job} job missing AWS_DEFAULT_REGION env" >&2; exit 1; }
+      else
+        awk -v job="$job" '
+          $0 ~ "^  " job ":$" { flag=1; next }
+          flag && /^  [a-z][a-z-]*:$/ { flag=0 }
+          flag
+        ' packages/framework/test/fixtures/expected-pr-pipeline.yml \
+          | grep -qE 'AWS_DEFAULT_REGION' \
+          || { echo "ERROR: ${job} job missing AWS_DEFAULT_REGION env" >&2; exit 1; }
+      fi
+    done
   - "if command -v yq; then test \"$(yq '.jobs.\"ai-review\".needs | contains([\"contract\"])' packages/framework/test/fixtures/expected-pr-pipeline.yml)\" = 'true'; else awk '/^  ai-review:/,/^  [a-zA-Z]/' packages/framework/test/fixtures/expected-pr-pipeline.yml | grep -qE 'needs:.*contract'; fi  # Q runs early (after contract), not after sandbox-verify"
   # dora-emit always runs (terminal). Use yq for cross-line YAML traversal â€” the previous regex `dora-emit:[^}]*if:[^}]*always` does NOT span newlines under default grep, producing a false positive when fields are on separate lines
   - |

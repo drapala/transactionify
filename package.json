@@ -2,33 +2,45 @@
   "name": "transactionify",
   "version": "0.1.0",
   "license": "MIT",
+  "private": true,
+  "packageManager": "pnpm@9.12.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
   "bin": {
     "transactionify": "bin/transactionify.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "scripts/run-workspace-script.sh @golden-path/framework build",
+    "test": "scripts/run-workspace-script.sh @golden-path/framework test",
+    "codegen": "scripts/run-workspace-script.sh @golden-path/shared-schemas codegen",
+    "gen-workflows": "scripts/run-workspace-script.sh @golden-path/framework gen-workflows",
     "watch": "tsc -w",
-    "test": "jest",
     "cdk": "cdk",
     "cdk:version": "npx cdk --version",
     "cdk:build": "npx tsc",
     "cdk:watch": "npx tsc -w",
     "cdk:synth": "npx cdk synth",
-    "cicd:synth": "npm run build && npm run cdk:synth"
+    "cicd:synth": "npx tsc && npm run cdk:synth"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.27.9",
     "@types/jest": "^29.5.0",
     "@types/node": "^20.0.0",
     "aws-cdk": "^2.168.0",
     "jest": "^29.5.0",
+    "prettier": "^3.3.3",
     "ts-jest": "^29.1.0",
     "ts-node": "^10.9.1",
-    "typescript": "~5.3.0"
+    "typescript": "~5.3.0",
+    "vitest": "^2.1.4"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.5",
     "aws-cdk-lib": "^2.168.0",
     "constructs": "^10.3.0",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "source-map-support": "^0.5.21"
   }
 }

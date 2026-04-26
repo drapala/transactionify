@@ -1,0 +1,39 @@
+# CODEOWNERS — review routing for the Golden Path platform repo.
+#
+# Format (per https://docs.github.com/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners):
+#   <pattern>  @owner1 @org/team
+# Last matching line wins. Catch-all is the platform owner; specific paths
+# route to the same owner today (solo author) but the structure documents
+# WHO owns WHAT — ready for an org with team handles when the platform team
+# scales beyond one person.
+
+# Default catch-all — every PR gets at least one CODEOWNERS reviewer.
+*                              @drapala
+
+# Platform packages — code that ships as `dx` and `@golden-path/framework`.
+/packages/cli/                 @drapala
+/packages/framework/           @drapala
+/packages/shared-schemas/      @drapala
+
+# Spec-first artifacts — change in concert; reviewer gates the chain.
+/.kiro/                        @drapala
+/golden-path-tickets/          @drapala
+
+# Architecture decisions and RFCs.
+/docs/ADR/                     @drapala
+/docs/RFC-template.md          @drapala
+/docs/DORA.md                  @drapala
+/docs/LOCAL-ENV.md             @drapala
+/docs/adapters/                @drapala
+
+# Governance and CI plumbing.
+/.github/workflows/            @drapala
+/.github/CODEOWNERS            @drapala
+/scripts/                      @drapala
+
+# Reference service — the integration case study. Currently solo;
+# in production this would route to the team that owns the service.
+/src/python/                   @drapala
+/test/                         @drapala
+/lib/                          @drapala
+/bin/                          @drapala

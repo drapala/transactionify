@@ -11,79 +11,74 @@ class TestListTransactionsHandler:
 
     @patch('src.python.transactionify.handlers.api.rest.transaction.list.main.list_transactions')
     def test_handler_success(self, mock_list_transactions):
-        """Test successful transaction listing."""
-        mock_list_transactions.return_value = [
-            {
-                'id': '019a4757-c049-7ea8-a110-2ea110c5a6f9',
-                'type': 'payment',
-                'amount': {
-                    'value': '100.00',
-                    'currency': 'USD'
+        """Test successful transaction listing.
+
+        Updated for upstream commit a0d9b5e ("Added pagination"): the service
+        returns a dict {'transactions': [...], 'has_more': bool, 'next_cursor':
+        ...} not a flat list. Handler calls .get('transactions', ...) on the
+        result, so the mock must return the dict shape (was a list pre-pagination).
+        """
+        mock_list_transactions.return_value = {
+            'transactions': [
+                {
+                    'id': '019a4757-c049-7ea8-a110-2ea110c5a6f9',
+                    'type': 'payment',
+                    'amount': {'value': '100.00', 'currency': 'USD'},
+                    'timestamp': '2024-02-22T10:00:00Z',
                 },
-                'timestamp': '2024-02-22T10:00:00Z'
-            },
-            {
-                'id': '019a4757-c049-7ea8-a110-2ea110c5a700',
-                'type': 'payment',
-                'amount': {
-                    'value': '50.00',
-                    'currency': 'USD'
+                {
+                    'id': '019a4757-c049-7ea8-a110-2ea110c5a700',
+                    'type': 'payment',
+                    'amount': {'value': '50.00', 'currency': 'USD'},
+                    'timestamp': '2024-02-22T11:00:00Z',
                 },
-                'timestamp': '2024-02-22T11:00:00Z'
-            }
-        ]
+            ],
+            'has_more': False,
+        }
 
         event = {
             'requestContext': {
-                'authorizer': {
-                    'lambda': {
-                        'user_id': '019a4757-c049-7ea8-a110-2ea110c5a6f7'
-                    }
-                }
+                'authorizer': {'lambda': {'user_id': '019a4757-c049-7ea8-a110-2ea110c5a6f7'}}
             },
-            'pathParameters': {
-                'account_id': '019a4757-c049-7ea8-a110-2ea110c5a6f8'
-            }
+            'pathParameters': {'account_id': '019a4757-c049-7ea8-a110-2ea110c5a6f8'},
         }
 
         response = handler(event, None)
 
         assert response['statusCode'] == 200
         body = json.loads(response['body'])
-        assert len(body) == 2
-        assert body[0]['id'] == '019a4757-c049-7ea8-a110-2ea110c5a6f9'
-        assert body[0]['type'] == 'payment'
-        assert body[0]['amount']['value'] == '100.00'
-        assert body[0]['timestamp'] == '2024-02-22T10:00:00Z'
+        txs = body['transactions']
+        assert len(txs) == 2
+        assert txs[0]['id'] == '019a4757-c049-7ea8-a110-2ea110c5a6f9'
+        assert txs[0]['type'] == 'payment'
+        assert txs[0]['amount']['value'] == '100.00'
+        assert txs[0]['timestamp'] == '2024-02-22T10:00:00Z'
+        # Handler now passes limit + cursor through; assert keyword args.
         mock_list_transactions.assert_called_once_with(
             '019a4757-c049-7ea8-a110-2ea110c5a6f7',
-            '019a4757-c049-7ea8-a110-2ea110c5a6f8'
+            '019a4757-c049-7ea8-a110-2ea110c5a6f8',
+            limit=20,
+            cursor=None,
         )
 
     @patch('src.python.transactionify.handlers.api.rest.transaction.list.main.list_transactions')
     def test_handler_empty_list(self, mock_list_transactions):
-        """Test successful listing with no transactions."""
-        mock_list_transactions.return_value = []
+        """Test successful listing with no transactions (paginated dict shape)."""
+        mock_list_transactions.return_value = {'transactions': [], 'has_more': False}
 
         event = {
             'requestContext': {
-                'authorizer': {
-                    'lambda': {
-                        'user_id': '019a4757-c049-7ea8-a110-2ea110c5a6f7'
-                    }
-                }
+                'authorizer': {'lambda': {'user_id': '019a4757-c049-7ea8-a110-2ea110c5a6f7'}}
             },
-            'pathParameters': {
-                'account_id': '019a4757-c049-7ea8-a110-2ea110c5a6f8'
-            }
+            'pathParameters': {'account_id': '019a4757-c049-7ea8-a110-2ea110c5a6f8'},
         }
 
         response = handler(event, None)
 
         assert response['statusCode'] == 200
         body = json.loads(response['body'])
-        assert len(body) == 0
-        assert body == []
+        assert body['transactions'] == []
+        assert body['has_more'] is False
 
     def test_handler_missing_user_id(self):
         """Test error when user_id is missing from authorizer context."""

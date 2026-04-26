@@ -1,0 +1,3 @@
+project: passing-repo
+stack: python
+service_shape: wheel

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://golden-path.example.com/schemas/dx-config.schema.json",
+  "title": ".dx.yaml — per-service Golden Path config",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["project", "stack", "service_shape"],
+  "properties": {
+    "project": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Logical project name (matches Backstage catalog-info.metadata.name)."
+    },
+    "stack": {
+      "type": "string",
+      "enum": ["python", "go", "clojure", "typescript"],
+      "description": "RuntimeAdapter registry key. Python is real; others are stubs in the PoC."
+    },
+    "service_shape": {
+      "type": "string",
+      "enum": ["lambda", "wheel", "binary"],
+      "description": "Packaging strategy hint for the RuntimeAdapter. lambda = AWS Lambda; wheel = distributable Python; binary = Go/Clojure native binary."
+    },
+    "test_root": {
+      "type": "string",
+      "description": "Optional. Where the project's pytest.ini lives (also the cwd dx check passes to pytest). Default by service_shape: lambda → 'test/unit/src/python', wheel → 'tests'. Required only when the project deviates."
+    },
+    "work_id_pattern": {
+      "type": "string",
+      "description": "Optional override of the default Work-ID regex. Defaults to the platform-wide '^(LL|GP)-[0-9]+$'."
+    },
+    "agents": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Optional per-agent settings (e.g. amazon_q { app_id, comment_trigger })."
+    },
+    "custom_steps": {
+      "type": "array",
+      "description": "Escape hatch — extra steps spliced into dx check / generated workflows.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "run"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "run":  { "type": "string", "minLength": 1 },
+          "stage": {
+            "type": "string",
+            "enum": ["pre-lint", "post-lint", "post-unit", "post-pbt", "post-contract"]
+          }
+        }
+      }
+    }
+  }
+}
