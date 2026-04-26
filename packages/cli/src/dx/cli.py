@@ -50,9 +50,10 @@ from dx.commands.pr import pr_command  # noqa: E402
 # they accept positional arguments. A sub-Typer with invoke_without_command=True
 # + positional callback args makes Typer's help advertise an extra COMMAND slot
 # and the runner mis-parses the args as missing.
+from dx.commands.dora import dora_app  # noqa: E402
+
 governance_app = typer.Typer(help="Apply the platform GitHub ruleset (GP-008).")
 local_app = typer.Typer(help="LocalStack + seeded DynamoDB lifecycle (GP-009d).")
-dora_app = typer.Typer(help="DORA aggregator: 4 PDF metrics from raw events (GP-013).")
 
 app.add_typer(init_app, name="init")
 app.add_typer(check_app, name="check")
@@ -79,11 +80,6 @@ def governance_root() -> None:
 @local_app.callback(invoke_without_command=True)
 def local_root() -> None:
     _stub("local")
-
-
-@dora_app.callback(invoke_without_command=True)
-def dora_root() -> None:
-    _stub("dora")
 
 
 @app.callback(invoke_without_command=True)
