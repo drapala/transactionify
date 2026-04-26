@@ -166,7 +166,7 @@ jobs:
       - name: install deps
         run: pnpm install --frozen-lockfile
       - name: cdk synth
-        run: pnpm cdk synth --quiet
+        run: npx cdk synth --quiet
   sandbox-verify:
     runs-on: ubuntu-latest
     needs:
@@ -198,7 +198,7 @@ jobs:
 
           # (requires OIDC + sandbox AWS account, ~1d of plumbing).
 
-          pnpm cdk synth --context account=000000000000 --context region=us-east-1 --quiet
+          npx cdk synth --context account=000000000000 --context region=us-east-1 --quiet
 
           test -d cdk.out
 
